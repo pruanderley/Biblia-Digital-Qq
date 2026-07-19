@@ -394,12 +394,20 @@
     }
   }
 
+  var _suprimirHistorico = false;
+
   function selecionarCapitulo(capitulo){
     capituloAtual = capitulo;
     renderGradeCapitulos();
     mostrarCapitulo();
     trocarTab("livros");
     fecharPainel();
+
+    if(!_suprimirHistorico){
+      try{
+        history.pushState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
+      }catch(e){}
+    }
   }
 
   // ============================================================
@@ -611,6 +619,8 @@
     mostrarToast(dadosUsuario.favoritos[chaveSelecionada] ? "Adicionado aos favoritos" : "Removido dos favoritos");
   };
 
+  function fecharNota(){ document.getElementById("overlay-nota").classList.remove("open"); }
+
   document.getElementById("btn-anotar").onclick = function(){
     var v = mapaVersos[chaveSelecionada];
     document.getElementById("nota-ref").textContent = v.livro+" "+v.capitulo+":"+v.versiculo;
@@ -624,7 +634,7 @@
     else delete dadosUsuario.anotacoes[chaveSelecionada];
     salvarDadosUsuario();
     mostrarCapitulo();
-    document.getElementById("overlay-nota").classList.remove("open");
+    fecharNota();
     mostrarToast("Anotação salva");
   };
 
@@ -835,7 +845,7 @@
   });
 
   document.getElementById("overlay-sheet").addEventListener("click", function(e){ if(e.target===this) fecharMenuVersiculo(); });
-  document.getElementById("overlay-nota").addEventListener("click", function(e){ if(e.target===this) this.classList.remove("open"); });
+  document.getElementById("overlay-nota").addEventListener("click", function(e){ if(e.target===this) fecharNota(); });
 
   document.getElementById("btn-busca").onclick = abrirBusca;
   document.getElementById("btn-fechar-busca").onclick = fecharBusca;
@@ -901,8 +911,54 @@
     } else if(livros.length){
       livroInicial = livros[0];
     }
-    if(livroInicial) selecionarLivro(livroInicial, capituloInicial);
+    if(livroInicial){
+      _suprimirHistorico = true;
+      selecionarLivro(livroInicial, capituloInicial);
+      _suprimirHistorico = false;
+      try{
+        history.replaceState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
+      }catch(e){}
+    }
   }
+
+  // ============================================================
+  // BOTÃO VOLTAR (Android / navegador) — navega pelo histórico de
+  // capítulos em vez de sair do app direto
+  // ============================================================
+  window.addEventListener("popstate", function(e){
+    // Se algum painel/menu estiver aberto, o voltar só fecha ele
+    // e devolve uma entrada ao histórico (não sai da leitura atual)
+    if(document.getElementById("overlay-sheet").classList.contains("open")){
+      fecharMenuVersiculo();
+      history.pushState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
+      return;
+    }
+    if(document.getElementById("overlay-nota").classList.contains("open")){
+      fecharNota();
+      history.pushState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
+      return;
+    }
+    if(document.getElementById("painel-busca").classList.contains("open")){
+      fecharBusca();
+      history.pushState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
+      return;
+    }
+    if(document.getElementById("overlay-painel").classList.contains("open")){
+      fecharPainel();
+      history.pushState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
+      return;
+    }
+
+    // Sem painéis abertos: navega para o capítulo salvo nesse ponto do histórico
+    var estado = e.state;
+    if(estado && estado.livro){
+      _suprimirHistorico = true;
+      selecionarLivro(estado.livro, estado.capitulo);
+      _suprimirHistorico = false;
+    }
+    // Se não houver estado (chegou ao início da pilha), deixa o navegador
+    // seguir o comportamento padrão — é aí que o app realmente fecha/sai
+  });
 
   if(document.readyState==="complete" || document.readyState==="interactive"){
     setTimeout(iniciar, 30);
