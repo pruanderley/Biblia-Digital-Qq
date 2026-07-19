@@ -50,6 +50,7 @@
     display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
   }
   #topbar .icon-btn:active{background:var(--white);color:#000;}
+  #topbar .icon-btn.ativo{background:var(--white);color:#000;}
   #topbar h1{
     font-family:var(--display);font-size:15px;letter-spacing:1.5px;font-weight:600;
     text-transform:uppercase; flex:1; text-align:center; color:var(--ink);
@@ -191,6 +192,7 @@
       <h1 id="titulo-app">Bíblia Digital Qq</h1>
       <span id="ref-atual"></span>
     </div>
+    <button class="icon-btn" id="btn-audio-topo" aria-label="Ouvir capítulo">🔊</button>
     <button class="icon-btn" id="btn-busca" aria-label="Pesquisar">🔍</button>
   </div>
 
@@ -404,6 +406,8 @@
   // RENDERIZAÇÃO DO CAPÍTULO
   // ============================================================
   function mostrarCapitulo(){
+    if(audioTocando) pararAudio();
+
     var container = document.getElementById("versos");
     var vazio = document.getElementById("estado-vazio");
     container.innerHTML = "";
@@ -669,19 +673,100 @@
     document.body.removeChild(ta);
   }
 
+  var audioTocando = false;
+  var audioVersos = [];
+  var audioIndice = 0;
+
+  function atualizarBotaoAudioTopo(){
+    var btn = document.getElementById("btn-audio-topo");
+    btn.textContent = audioTocando ? "⏹" : "🔊";
+    btn.classList.toggle("ativo", audioTocando);
+  }
+
+  function pararAudio(){
+    audioTocando = false;
+    if("speechSynthesis" in window) window.speechSynthesis.cancel();
+    atualizarBotaoAudioTopo();
+  }
+
+  function falarProximoVerso(){
+    if(!audioTocando || audioIndice >= audioVersos.length){
+      pararAudio();
+      return;
+    }
+    var v = audioVersos[audioIndice];
+    var u = new SpeechSynthesisUtterance(v.texto);
+    u.lang = "pt-BR";
+    var vozes = window.speechSynthesis.getVoices();
+    var vozPt = vozes.find(function(vv){ return vv.lang && vv.lang.toLowerCase().indexOf("pt") === 0; });
+    if(vozPt) u.voice = vozPt;
+
+    u.onend = function(){
+      if(!audioTocando) return;
+      audioIndice++;
+      // Pequena pausa entre versos evita corte no início do próximo (mesmo ajuste do projeto original)
+      setTimeout(falarProximoVerso, 120);
+    };
+    u.onerror = function(ev){
+      var erro = (ev && ev.error) || "";
+      if(erro === "interrupted" || erro === "canceled"){
+        return; // parada normal (usuário parou o áudio) — não é falha
+      }
+      if(!audioTocando) return;
+      audioIndice++;
+      setTimeout(falarProximoVerso, 200);
+    };
+
+    try{
+      window.speechSynthesis.speak(u);
+    }catch(e){
+      pararAudio();
+      return;
+    }
+
+    // Bug clássico do Chrome/WebView: speak() é aceito mas o motor fica com paused=true,
+    // silenciando tudo depois do primeiro versículo. Forçar resume() corrige na maioria dos casos.
+    setTimeout(function(){
+      if(!audioTocando) return;
+      try{
+        if(window.speechSynthesis.paused) window.speechSynthesis.resume();
+      }catch(e){}
+    }, 300);
+  }
+
   function ouvirTexto(texto){
     if(!("speechSynthesis" in window)){
       mostrarToast("Áudio não é suportado neste navegador");
       return;
     }
-    window.speechSynthesis.cancel();
-    var u = new SpeechSynthesisUtterance(texto);
-    u.lang = "pt-BR";
-    var vozes = window.speechSynthesis.getVoices();
-    var vozPt = vozes.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf("pt") === 0; });
-    if(vozPt) u.voice = vozPt;
-    window.speechSynthesis.speak(u);
+    pararAudio();
+    audioVersos = [{texto:texto}];
+    audioIndice = 0;
+    audioTocando = true;
+    atualizarBotaoAudioTopo();
+    falarProximoVerso();
   }
+
+  function alternarAudioCapitulo(){
+    if(!("speechSynthesis" in window)){
+      mostrarToast("Áudio não é suportado neste navegador");
+      return;
+    }
+    if(audioTocando){
+      pararAudio();
+      return;
+    }
+    var versos = dadosBiblia.filter(function(v){ return v.livro===livroAtual && v.capitulo===capituloAtual; });
+    if(!versos.length) return;
+    window.speechSynthesis.cancel();
+    audioVersos = versos;
+    audioIndice = 0;
+    audioTocando = true;
+    atualizarBotaoAudioTopo();
+    falarProximoVerso();
+  }
+
+  document.getElementById("btn-audio-topo").onclick = alternarAudioCapitulo;
 
   // ============================================================
   // BUSCA
@@ -780,7 +865,9 @@
     selecionarCapitulo: selecionarCapitulo,
     abrirMenuVersiculo: abrirMenuVersiculo,
     aplicarDestaque: aplicarDestaque,
-    getEstado: function(){ return {livroAtual:livroAtual, capituloAtual:capituloAtual, dadosUsuario:dadosUsuario, mapaVersos:mapaVersos, dadosBiblia:dadosBiblia}; }
+    alternarAudioCapitulo: alternarAudioCapitulo,
+    pararAudio: pararAudio,
+    getEstado: function(){ return {livroAtual:livroAtual, capituloAtual:capituloAtual, dadosUsuario:dadosUsuario, mapaVersos:mapaVersos, dadosBiblia:dadosBiblia, audioTocando:audioTocando, audioVersos:audioVersos, audioIndice:audioIndice}; }
   };
 })();
 </script>
