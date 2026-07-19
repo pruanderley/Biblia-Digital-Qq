@@ -378,7 +378,7 @@
       var btn = document.createElement("button");
       btn.textContent = cs;
       if(cs===capituloAtual) btn.className = "ativo";
-      btn.onclick = function(){ selecionarCapitulo(cs); };
+      btn.onclick = function(){ selecionarCapitulo(cs); fecharPainel(); };
       grade.appendChild(btn);
     });
     el.appendChild(grade);
@@ -401,7 +401,6 @@
     renderGradeCapitulos();
     mostrarCapitulo();
     trocarTab("livros");
-    fecharPainel();
 
     if(!_suprimirHistorico){
       try{
@@ -503,7 +502,7 @@
       var card = document.createElement("div");
       card.className = "card-item";
       card.innerHTML = '<div class="ref">'+partes[0]+' '+partes[1]+':'+partes[2]+'</div><div class="txt">'+escapeHtml(resumo)+'</div>';
-      card.onclick = function(){ selecionarLivro(partes[0], partes[1]); };
+      card.onclick = function(){ selecionarLivro(partes[0], partes[1]); fecharPainel(); };
       el.appendChild(card);
     });
   }
@@ -519,7 +518,7 @@
       var card = document.createElement("div");
       card.className = "card-item";
       card.innerHTML = '<div class="ref">'+h.livro+' '+h.capitulo+'</div><div class="txt" style="font-family:var(--ui);font-size:12.5px;color:var(--ink-mute);">'+h.data+'</div>';
-      card.onclick = function(){ selecionarLivro(h.livro, h.capitulo); };
+      card.onclick = function(){ selecionarLivro(h.livro, h.capitulo); fecharPainel(); };
       el.appendChild(card);
     });
   }
