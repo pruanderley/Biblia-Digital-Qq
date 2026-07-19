@@ -61,7 +61,7 @@
   #conteudo{flex:1;overflow-y:auto;padding:28px 20px 120px;}
   #versos{max-width:640px;margin:0 auto;}
   .verso{
-    font-family:var(--serif);font-size:19px;line-height:1.85;color:var(--ink);
+    font-family:var(--serif);font-size:var(--leitura-fs, 19px);line-height:1.85;color:var(--ink);
     margin-bottom:2px;padding:3px 6px;border-radius:6px;cursor:pointer;
     display:block;transition:background .12s ease;
   }
@@ -244,9 +244,9 @@
 
 <!-- Anotação -->
 <div class="sheet-overlay" id="overlay-nota">
-  <div class="sheet">
+  <div class="sheet" style="max-height:92vh;">
     <div class="sheet-ref" id="nota-ref"></div>
-    <textarea id="nota-texto" rows="5" style="width:100%;margin-top:14px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:var(--ui);font-size:14.5px;padding:10px;resize:vertical;"></textarea>
+    <textarea id="nota-texto" rows="18" style="width:100%;height:56vh;margin-top:14px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:var(--serif);font-size:16px;line-height:1.6;padding:16px;resize:vertical;"></textarea>
     <button class="acao-btn destaque-principal" id="btn-salvar-nota" style="margin-top:12px;">Salvar</button>
   </div>
 </div>
@@ -290,7 +290,7 @@
   // DADOS DO USUÁRIO (localStorage)
   // ============================================================
   function carregarDadosUsuario(){
-    var padrao = {destaques:{}, favoritos:{}, anotacoes:{}, historico:[], capitulosLidos:{}, ultimaPosicao:null};
+    var padrao = {destaques:{}, favoritos:{}, anotacoes:{}, historico:[], capitulosLidos:{}, ultimaPosicao:null, fonteTamanho:19};
     try{
       var s = localStorage.getItem(CHAVE_STORAGE);
       if(s){
@@ -782,13 +782,25 @@
     termo = termo.trim().toLowerCase();
     if(!termo){ el.innerHTML=""; return; }
 
-    var achados = dadosBiblia.filter(function(v){ return v.texto.toLowerCase().indexOf(termo)!==-1; }).slice(0, 200);
+    var todosAchados = dadosBiblia.filter(function(v){ return v.texto.toLowerCase().indexOf(termo)!==-1; });
+    var achados = todosAchados.slice(0, 200);
 
-    if(!achados.length){
+    if(!todosAchados.length){
       el.innerHTML = '<div style="color:var(--ink-mute);text-align:center;padding:30px 10px;font-family:var(--serif);">Nenhum versículo encontrado.</div>';
       return;
     }
+
     el.innerHTML = "";
+
+    var contador = document.createElement("div");
+    contador.style.cssText = "font-family:var(--ui);font-size:12px;letter-spacing:.5px;color:var(--ink-mute);padding:6px 2px 12px;";
+    var totalTexto = todosAchados.length + (todosAchados.length===1 ? " resultado encontrado" : " resultados encontrados");
+    if(todosAchados.length > achados.length){
+      totalTexto += " (mostrando os " + achados.length + " primeiros)";
+    }
+    contador.textContent = totalTexto;
+    el.appendChild(contador);
+
     achados.forEach(function(v){
       var item = document.createElement("div");
       item.className = "resultado-item";
@@ -828,6 +840,52 @@
   document.getElementById("btn-busca").onclick = abrirBusca;
   document.getElementById("btn-fechar-busca").onclick = fecharBusca;
   document.getElementById("input-busca").addEventListener("input", function(){ executarBusca(this.value); });
+
+  // ============================================================
+  // ZOOM POR PINÇA (dois dedos) NO TAMANHO DA LETRA
+  // ============================================================
+  (function(){
+    var el = document.getElementById("conteudo");
+    var startDist = 0, startSize = dadosUsuario.fonteTamanho || 19, pinching = false;
+
+    function dist(touches){
+      var dx = touches[0].clientX - touches[1].clientX;
+      var dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    function aplicarTamanho(px){
+      document.documentElement.style.setProperty("--leitura-fs", px + "px");
+    }
+    aplicarTamanho(dadosUsuario.fonteTamanho || 19);
+
+    el.addEventListener("touchstart", function(e){
+      if(e.touches.length === 2){
+        pinching = true;
+        startDist = dist(e.touches);
+        startSize = dadosUsuario.fonteTamanho || 19;
+        e.preventDefault();
+      }
+    }, {passive:false});
+
+    el.addEventListener("touchmove", function(e){
+      if(!pinching || e.touches.length !== 2) return;
+      e.preventDefault();
+      var ratio = dist(e.touches) / startDist;
+      var novoTamanho = Math.round(Math.max(14, Math.min(34, startSize * ratio)));
+      if(novoTamanho !== dadosUsuario.fonteTamanho){
+        dadosUsuario.fonteTamanho = novoTamanho;
+        aplicarTamanho(novoTamanho);
+      }
+    }, {passive:false});
+
+    el.addEventListener("touchend", function(e){
+      if(e.touches.length < 2 && pinching){
+        pinching = false;
+        salvarDadosUsuario();
+      }
+    }, {passive:true});
+  })();
 
   // ============================================================
   // INICIALIZAÇÃO
