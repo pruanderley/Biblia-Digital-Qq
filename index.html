@@ -396,6 +396,15 @@
 
   var _suprimirHistorico = false;
 
+  function empilharEstadoOverlay(){
+    // Garante que o botão voltar tenha uma entrada de histórico pra consumir
+    // ao fechar um painel/menu — sem isso, o Android fecha o app direto
+    // em vez de só fechar o que está aberto na tela.
+    try{
+      history.pushState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
+    }catch(e){}
+  }
+
   function selecionarCapitulo(capitulo){
     capituloAtual = capitulo;
     renderGradeCapitulos();
@@ -591,6 +600,7 @@
     favBtn.textContent = dadosUsuario.favoritos[chave] ? "★ Remover dos Favoritos" : "☆ Adicionar aos Favoritos";
 
     document.getElementById("overlay-sheet").classList.add("open");
+    empilharEstadoOverlay();
   }
   function fecharMenuVersiculo(){ document.getElementById("overlay-sheet").classList.remove("open"); }
 
@@ -626,6 +636,7 @@
     document.getElementById("nota-texto").value = dadosUsuario.anotacoes[chaveSelecionada] || "";
     fecharMenuVersiculo();
     document.getElementById("overlay-nota").classList.add("open");
+    empilharEstadoOverlay();
   };
   document.getElementById("btn-salvar-nota").onclick = function(){
     var texto = document.getElementById("nota-texto").value.trim();
@@ -783,6 +794,7 @@
   function abrirBusca(){
     document.getElementById("painel-busca").classList.add("open");
     document.getElementById("input-busca").focus();
+    empilharEstadoOverlay();
   }
   function fecharBusca(){ document.getElementById("painel-busca").classList.remove("open"); }
 
@@ -837,7 +849,7 @@
   // ============================================================
   // EVENTOS GERAIS
   // ============================================================
-  document.getElementById("btn-menu").onclick = function(){ abrirPainel(); trocarTab("livros"); };
+  document.getElementById("btn-menu").onclick = function(){ abrirPainel(); trocarTab("livros"); empilharEstadoOverlay(); };
   document.getElementById("overlay-painel").addEventListener("click", function(e){ if(e.target===this) fecharPainel(); });
   document.querySelectorAll(".painel-tabs button").forEach(function(b){
     b.onclick = function(){ trocarTab(b.dataset.tab); };
