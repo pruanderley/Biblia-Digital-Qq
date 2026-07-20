@@ -394,6 +394,42 @@
     }
   }
 
+  // ============================================================
+  // NAVEGAÇÃO SEQUENCIAL (usada pelo gesto de arrastar / swipe)
+  // ============================================================
+  function proximoCapitulo(){
+    var idx = capitulosDoLivro.indexOf(Number(capituloAtual));
+    if(idx !== -1 && idx < capitulosDoLivro.length - 1){
+      selecionarCapitulo(String(capitulosDoLivro[idx + 1]));
+      return;
+    }
+    var idxLivro = livros.indexOf(livroAtual);
+    if(idxLivro !== -1 && idxLivro < livros.length - 1){
+      selecionarLivro(livros[idxLivro + 1], "1");
+      mostrarToast(livros[idxLivro + 1] + " 1");
+    } else {
+      mostrarToast("Fim da Bíblia");
+    }
+  }
+
+  function capituloAnterior(){
+    var idx = capitulosDoLivro.indexOf(Number(capituloAtual));
+    if(idx > 0){
+      selecionarCapitulo(String(capitulosDoLivro[idx - 1]));
+      return;
+    }
+    var idxLivro = livros.indexOf(livroAtual);
+    if(idxLivro > 0){
+      var livroAnterior = livros[idxLivro - 1];
+      var capsAnterior = capitulosDe(livroAnterior);
+      var ultimoCap = String(capsAnterior[capsAnterior.length - 1]);
+      selecionarLivro(livroAnterior, ultimoCap);
+      mostrarToast(livroAnterior + " " + ultimoCap);
+    } else {
+      mostrarToast("Início da Bíblia");
+    }
+  }
+
   var _suprimirHistorico = false;
 
   function empilharEstadoOverlay(){
@@ -912,6 +948,44 @@
   })();
 
   // ============================================================
+  // ARRASTAR OS DEDOS PROS LADOS (swipe) — troca de capítulo
+  // ============================================================
+  (function(){
+    var el = document.getElementById("conteudo");
+    var inicioX = 0, inicioY = 0, inicioTempo = 0, comDoisDedos = false;
+
+    var DISTANCIA_MINIMA = 70;   // px — arrasto curto de menos não conta como swipe
+    var TEMPO_MAXIMO = 900;      // ms — gesto lento demais não conta (pode ser leitura/seleção)
+    var PROPORCAO_MINIMA = 1.8;  // o arrasto precisa ser bem mais horizontal do que vertical
+
+    el.addEventListener("touchstart", function(e){
+      if(e.touches.length === 1){
+        inicioX = e.touches[0].clientX;
+        inicioY = e.touches[0].clientY;
+        inicioTempo = Date.now();
+        comDoisDedos = false;
+      } else {
+        comDoisDedos = true; // pinça de zoom em andamento — ignora como swipe
+      }
+    }, {passive:true});
+
+    el.addEventListener("touchend", function(e){
+      if(comDoisDedos || e.touches.length !== 0 || e.changedTouches.length !== 1) return;
+
+      var dx = e.changedTouches[0].clientX - inicioX;
+      var dy = e.changedTouches[0].clientY - inicioY;
+      var dt = Date.now() - inicioTempo;
+
+      if(dt > TEMPO_MAXIMO) return;
+      if(Math.abs(dx) < DISTANCIA_MINIMA) return;
+      if(Math.abs(dx) < Math.abs(dy) * PROPORCAO_MINIMA) return;
+
+      if(dx < 0) proximoCapitulo();   // arrastou pra esquerda -> "puxa" o próximo capítulo
+      else capituloAnterior();        // arrastou pra direita -> volta o capítulo
+    }, {passive:true});
+  })();
+
+  // ============================================================
   // INICIALIZAÇÃO
   // ============================================================
   function iniciar(){
@@ -995,6 +1069,8 @@
     aplicarDestaque: aplicarDestaque,
     alternarAudioCapitulo: alternarAudioCapitulo,
     pararAudio: pararAudio,
+    proximoCapitulo: proximoCapitulo,
+    capituloAnterior: capituloAnterior,
     getEstado: function(){ return {livroAtual:livroAtual, capituloAtual:capituloAtual, dadosUsuario:dadosUsuario, mapaVersos:mapaVersos, dadosBiblia:dadosBiblia, audioTocando:audioTocando, audioVersos:audioVersos, audioIndice:audioIndice}; }
   };
 })();
