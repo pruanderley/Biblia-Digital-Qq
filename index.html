@@ -687,9 +687,16 @@
     mostrarToast("Anotação salva");
   };
 
+  function capitalizarPrimeira(texto){
+    if(!texto) return texto;
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
   document.getElementById("btn-copiar").onclick = function(){
     var v = mapaVersos[chaveSelecionada];
-    var texto = v.livro+" "+v.capitulo+":"+v.versiculo+" - "+v.texto;
+    var textoFormatado = capitalizarPrimeira(v.texto);
+    var referencia = v.livro.toUpperCase()+" "+v.capitulo+"."+v.versiculo;
+    var texto = textoFormatado+"\n"+referencia;
     copiarTexto(texto);
     fecharMenuVersiculo();
     mostrarToast("Versículo copiado");
