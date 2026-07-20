@@ -421,8 +421,11 @@
   // ============================================================
   // RENDERIZAÇÃO DO CAPÍTULO
   // ============================================================
-  function mostrarCapitulo(){
+  function mostrarCapitulo(preservarScroll){
     if(audioTocando) pararAudio();
+
+    var elConteudo = document.getElementById("conteudo");
+    var scrollAntes = preservarScroll ? elConteudo.scrollTop : 0;
 
     var container = document.getElementById("versos");
     var vazio = document.getElementById("estado-vazio");
@@ -471,7 +474,7 @@
       container.appendChild(span);
     });
 
-    document.getElementById("conteudo").scrollTop = 0;
+    elConteudo.scrollTop = preservarScroll ? scrollAntes : 0;
     registrarHistorico(livroAtual, capituloAtual);
   }
 
@@ -608,14 +611,14 @@
     if(dadosUsuario.destaques[chave]===cor){ delete dadosUsuario.destaques[chave]; }
     else{ dadosUsuario.destaques[chave] = cor; }
     salvarDadosUsuario();
-    mostrarCapitulo();
+    mostrarCapitulo(true);
     fecharMenuVersiculo();
   }
 
   document.getElementById("btn-remover-destaque").onclick = function(){
     delete dadosUsuario.destaques[chaveSelecionada];
     salvarDadosUsuario();
-    mostrarCapitulo();
+    mostrarCapitulo(true);
     fecharMenuVersiculo();
   };
 
@@ -623,7 +626,7 @@
     if(dadosUsuario.favoritos[chaveSelecionada]) delete dadosUsuario.favoritos[chaveSelecionada];
     else dadosUsuario.favoritos[chaveSelecionada] = true;
     salvarDadosUsuario();
-    mostrarCapitulo();
+    mostrarCapitulo(true);
     fecharMenuVersiculo();
     mostrarToast(dadosUsuario.favoritos[chaveSelecionada] ? "Adicionado aos favoritos" : "Removido dos favoritos");
   };
@@ -643,7 +646,7 @@
     if(texto) dadosUsuario.anotacoes[chaveSelecionada] = texto;
     else delete dadosUsuario.anotacoes[chaveSelecionada];
     salvarDadosUsuario();
-    mostrarCapitulo();
+    mostrarCapitulo(true);
     fecharNota();
     mostrarToast("Anotação salva");
   };
