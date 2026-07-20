@@ -531,7 +531,12 @@
     dadosUsuario.historico = dadosUsuario.historico.slice(0,50);
 
     dadosUsuario.capitulosLidos[livro+"|"+capitulo] = true;
-    dadosUsuario.ultimaPosicao = {livro:livro, capitulo:capitulo};
+
+    var mesmoCapitulo = dadosUsuario.ultimaPosicao && dadosUsuario.ultimaPosicao.livro===livro && dadosUsuario.ultimaPosicao.capitulo===capitulo;
+    dadosUsuario.ultimaPosicao = {
+      livro:livro, capitulo:capitulo,
+      versiculo: mesmoCapitulo ? dadosUsuario.ultimaPosicao.versiculo : null
+    };
     salvarDadosUsuario();
   }
 
@@ -993,16 +998,74 @@
   })();
 
   // ============================================================
+  // POSIÇÃO EXATA DE LEITURA (qual versículo está no topo da tela)
+  // Salva continuamente pra retomar dali na próxima vez que abrir o app.
+  // ============================================================
+  function versoVisivelNoTopo(){
+    var elConteudo = document.getElementById("conteudo");
+    var referencia = elConteudo.getBoundingClientRect().top;
+    var versos = elConteudo.querySelectorAll("#versos .verso");
+    var melhor = null;
+    for(var i = 0; i < versos.length; i++){
+      var topoRelativo = versos[i].getBoundingClientRect().top - referencia;
+      if(topoRelativo <= 24){
+        melhor = versos[i];
+      } else {
+        break;
+      }
+    }
+    return melhor ? melhor.dataset.chave : null;
+  }
+
+  function salvarPosicaoDeLeitura(){
+    if(!livroAtual || !capituloAtual) return;
+    var chave = versoVisivelNoTopo();
+    var versiculo = null;
+    if(chave){
+      var partes = chave.split("|");
+      if(partes[0]===livroAtual && partes[1]===capituloAtual) versiculo = partes[2];
+    }
+    dadosUsuario.ultimaPosicao = {livro:livroAtual, capitulo:capituloAtual, versiculo:versiculo};
+    salvarDadosUsuario();
+  }
+
+  var _timeoutPosicaoLeitura = null;
+  document.getElementById("conteudo").addEventListener("scroll", function(){
+    clearTimeout(_timeoutPosicaoLeitura);
+    _timeoutPosicaoLeitura = setTimeout(salvarPosicaoDeLeitura, 400);
+  }, {passive:true});
+
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "hidden") salvarPosicaoDeLeitura();
+  });
+  window.addEventListener("pagehide", salvarPosicaoDeLeitura);
+  window.addEventListener("beforeunload", salvarPosicaoDeLeitura);
+
+  function rolarParaVersiculo(livro, capitulo, versiculo){
+    var chave = livro + "|" + capitulo + "|" + versiculo;
+    var versos = document.querySelectorAll("#versos .verso");
+    for(var i = 0; i < versos.length; i++){
+      if(versos[i].dataset.chave === chave){
+        var elConteudo = document.getElementById("conteudo");
+        elConteudo.scrollTop = versos[i].offsetTop - elConteudo.offsetTop - 8;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ============================================================
   // INICIALIZAÇÃO
   // ============================================================
   function iniciar(){
     carregarDados();
     renderListaLivros();
 
-    var livroInicial = null, capituloInicial = null;
+    var livroInicial = null, capituloInicial = null, versiculoInicial = null;
     if(dadosUsuario.ultimaPosicao && livros.indexOf(dadosUsuario.ultimaPosicao.livro)!==-1){
       livroInicial = dadosUsuario.ultimaPosicao.livro;
       capituloInicial = dadosUsuario.ultimaPosicao.capitulo;
+      versiculoInicial = dadosUsuario.ultimaPosicao.versiculo;
     } else if(livros.length){
       livroInicial = livros[0];
     }
@@ -1013,6 +1076,12 @@
       try{
         history.replaceState({livro:livroAtual, capitulo:capituloAtual}, "", location.pathname + location.search);
       }catch(e){}
+
+      if(versiculoInicial){
+        setTimeout(function(){
+          rolarParaVersiculo(livroAtual, capituloAtual, versiculoInicial);
+        }, 60);
+      }
     }
   }
 
@@ -1078,6 +1147,9 @@
     pararAudio: pararAudio,
     proximoCapitulo: proximoCapitulo,
     capituloAnterior: capituloAnterior,
+    versoVisivelNoTopo: versoVisivelNoTopo,
+    salvarPosicaoDeLeitura: salvarPosicaoDeLeitura,
+    rolarParaVersiculo: rolarParaVersiculo,
     getEstado: function(){ return {livroAtual:livroAtual, capituloAtual:capituloAtual, dadosUsuario:dadosUsuario, mapaVersos:mapaVersos, dadosBiblia:dadosBiblia, audioTocando:audioTocando, audioVersos:audioVersos, audioIndice:audioIndice}; }
   };
 })();
