@@ -68,7 +68,32 @@
   .verso:active{background:var(--bg-3);}
   .verso .num{font-family:var(--ui);font-size:11px;color:var(--ink-mute);vertical-align:super;margin-right:5px;}
   .verso .marca{margin-right:3px;font-size:13px;}
-  .verso.destacado{color:#000;border-radius:4px;}
+  .verso.destacado{border-radius:4px;}
+
+  /* ── DESTAQUES — mesmo sistema da Bíblia referência ── */
+  /* Modo escuro (único modo desta Bíblia) */
+  :root {
+    --hl-y-bg:  rgba(255, 220, 60,  0.22); --hl-y-bd:  #f5d040;
+    --hl-r-bg:  rgba(255, 60,  60,  0.20); --hl-r-bd:  #f06060;
+    --hl-g-bg:  rgba(40,  200, 100, 0.20); --hl-g-bd:  #4cc878;
+    --hl-b-bg:  rgba(60,  140, 255, 0.20); --hl-b-bd:  #6ab0f5;
+    --hl-o-bg:  rgba(255, 150, 40,  0.22); --hl-o-bd:  #f5a040;
+    --hl-pk-bg: rgba(255, 100, 160, 0.20); --hl-pk-bd: #f070a8;
+    --hl-p-bg:  rgba(160, 60,  220, 0.20); --hl-p-bd:  #b06cd8;
+    --hl-tl-bg: rgba(40,  200, 190, 0.20); --hl-tl-bd: #40c8c0;
+    --hl-br-bg: rgba(180, 120, 60,  0.22); --hl-br-bd: #c08040;
+    --hl-lm-bg: rgba(180, 220, 40,  0.22); --hl-lm-bd: #a8d840;
+  }
+  .hl-y  { background: var(--hl-y-bg)  !important; border-left: 3px solid var(--hl-y-bd);  }
+  .hl-r  { background: var(--hl-r-bg)  !important; border-left: 3px solid var(--hl-r-bd);  }
+  .hl-g  { background: var(--hl-g-bg)  !important; border-left: 3px solid var(--hl-g-bd);  }
+  .hl-b  { background: var(--hl-b-bg)  !important; border-left: 3px solid var(--hl-b-bd);  }
+  .hl-o  { background: var(--hl-o-bg)  !important; border-left: 3px solid var(--hl-o-bd);  }
+  .hl-pk { background: var(--hl-pk-bg) !important; border-left: 3px solid var(--hl-pk-bd); }
+  .hl-p  { background: var(--hl-p-bg)  !important; border-left: 3px solid var(--hl-p-bd);  }
+  .hl-tl { background: var(--hl-tl-bg) !important; border-left: 3px solid var(--hl-tl-bd); }
+  .hl-br { background: var(--hl-br-bg) !important; border-left: 3px solid var(--hl-br-bd); }
+  .hl-lm { background: var(--hl-lm-bg) !important; border-left: 3px solid var(--hl-lm-bd); }
 
   /* Capitular iluminada — assinatura visual do projeto */
   .capitular{
@@ -280,10 +305,24 @@
   var CHAVE_STORAGE = "biblia_qq_dados_usuario";
   var dadosUsuario = carregarDadosUsuario();
 
+  // Mapa: cor (hex) → classe CSS de destaque
+  var MAPA_HL = {
+    "#FFD600": "hl-y",
+    "#F44336": "hl-r",
+    "#4CAF50": "hl-g",
+    "#2196F3": "hl-b",
+    "#FF9800": "hl-o",
+    "#E91E8C": "hl-pk",
+    "#9C27B0": "hl-p",
+    "#00BCD4": "hl-tl",
+    "#795548": "hl-br",
+    "#8BC34A": "hl-lm"
+  };
+
   var CORES_DESTAQUE = [
-    ["#fff9c4","Amarelo"], ["#ffcdd2","Vermelho"], ["#dcedc8","Verde"], ["#bbdefb","Azul"],
-    ["#ffe0b2","Laranja"], ["#f8bbd0","Rosa"], ["#e1bee7","Roxo"], ["#b2ebf2","Turquesa"],
-    ["#d7ccc8","Marrom"], ["#f0f4c3","Lima"]
+    ["#FFD600","Amarelo"], ["#F44336","Vermelho"], ["#4CAF50","Verde"], ["#2196F3","Azul"],
+    ["#FF9800","Laranja"], ["#E91E8C","Rosa"], ["#9C27B0","Roxo"], ["#00BCD4","Turquesa"],
+    ["#795548","Marrom"], ["#8BC34A","Lima"]
   ];
 
   // ============================================================
@@ -493,7 +532,8 @@
       var cor = dadosUsuario.destaques[chave];
       if(cor){
         span.classList.add("destacado");
-        span.style.background = cor;
+        var hlClass = MAPA_HL[cor];
+        if(hlClass) span.classList.add(hlClass);
       }
 
       if(idx===0){
