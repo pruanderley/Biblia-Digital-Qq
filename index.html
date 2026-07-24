@@ -212,13 +212,14 @@
 <div id="app">
 
   <div id="topbar">
-    <button class="icon-btn" id="btn-menu" aria-label="Livros e capítulos">☰</button>
+    <button class="icon-btn" id="btn-menu" aria-expanded="false" aria-label="Livros e capítulos">☰</button>
     <div style="flex:1;">
       <h1 id="titulo-app">Bíblia Digital Qq</h1>
-      <span id="ref-atual"></span>
+      <!-- aria-live="polite" faz os leitores de tela anunciarem a mudança de capítulo sutilmente -->
+      <span id="ref-atual" aria-live="polite"></span>
     </div>
     <button class="icon-btn" id="btn-audio-topo" aria-label="Ouvir capítulo">🔊</button>
-    <button class="icon-btn" id="btn-busca" aria-label="Pesquisar">🔍</button>
+    <button class="icon-btn" id="btn-busca" aria-expanded="false" aria-label="Pesquisar">🔍</button>
   </div>
 
   <div id="conteudo">
@@ -341,7 +342,13 @@
     return padrao;
   }
   function salvarDadosUsuario(){
-    try{ localStorage.setItem(CHAVE_STORAGE, JSON.stringify(dadosUsuario)); }catch(e){}
+    try{ 
+      localStorage.setItem(CHAVE_STORAGE, JSON.stringify(dadosUsuario)); 
+    }catch(e){
+      if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+        mostrarToast("Aviso: Armazenamento local cheio. O espaço pode não ser suficiente para novas anotações.");
+      }
+    }
   }
 
   // ============================================================
@@ -398,13 +405,15 @@
   function renderListaLivros(){
     var el = document.getElementById("lista-livros");
     el.innerHTML = "";
+    var fragmento = document.createDocumentFragment();
     livros.forEach(function(livro){
       var btn = document.createElement("button");
       btn.className = "item-lista" + (livro===livroAtual ? " ativo" : "");
       btn.textContent = livro;
       btn.onclick = function(){ selecionarLivro(livro); };
-      el.appendChild(btn);
+      fragmento.appendChild(btn);
     });
+    el.appendChild(fragmento);
   }
 
   function renderGradeCapitulos(){
@@ -412,14 +421,17 @@
     el.innerHTML = "";
     var grade = document.createElement("div");
     grade.className = "grade-capitulos";
+    
+    var fragmento = document.createDocumentFragment();
     capitulosDoLivro.forEach(function(c){
       var cs = String(c);
       var btn = document.createElement("button");
       btn.textContent = cs;
       if(cs===capituloAtual) btn.className = "ativo";
       btn.onclick = function(){ selecionarCapitulo(cs); fecharPainel(); };
-      grade.appendChild(btn);
+      fragmento.appendChild(btn);
     });
+    grade.appendChild(fragmento);
     el.appendChild(grade);
   }
 
@@ -517,6 +529,9 @@
     }
     vazio.classList.add("hidden");
 
+    // Uso de DocumentFragment para evitar múltiplos reflows na tela
+    var fragmento = document.createDocumentFragment();
+
     versos.forEach(function(v, idx){
       var chave = v.livro+"|"+v.capitulo+"|"+v.versiculo;
       mapaVersos[chave] = v;
@@ -547,9 +562,10 @@
       }
 
       span.onclick = function(){ abrirMenuVersiculo(chave); };
-      container.appendChild(span);
+      fragmento.appendChild(span);
     });
 
+    container.appendChild(fragmento);
     elConteudo.scrollTop = preservarScroll ? scrollAntes : 0;
     registrarHistorico(livroAtual, capituloAtual);
   }
@@ -588,6 +604,8 @@
       return;
     }
     el.innerHTML = "";
+    var fragmento = document.createDocumentFragment();
+    
     chaves.forEach(function(chave){
       var partes = chave.split("|");
       var texto = indiceVersos[chave] || "";
@@ -596,8 +614,9 @@
       card.className = "card-item";
       card.innerHTML = '<div class="ref">'+partes[0]+' '+partes[1]+':'+partes[2]+'</div><div class="txt">'+escapeHtml(resumo)+'</div>';
       card.onclick = function(){ selecionarLivro(partes[0], partes[1]); fecharPainel(); };
-      el.appendChild(card);
+      fragmento.appendChild(card);
     });
+    el.appendChild(fragmento);
   }
 
   function renderHistorico(){
@@ -607,18 +626,23 @@
       return;
     }
     el.innerHTML = "";
+    var fragmento = document.createDocumentFragment();
+    
     dadosUsuario.historico.forEach(function(h){
       var card = document.createElement("div");
       card.className = "card-item";
       card.innerHTML = '<div class="ref">'+h.livro+' '+h.capitulo+'</div><div class="txt" style="font-family:var(--ui);font-size:12.5px;color:var(--ink-mute);">'+h.data+'</div>';
       card.onclick = function(){ selecionarLivro(h.livro, h.capitulo); fecharPainel(); };
-      el.appendChild(card);
+      fragmento.appendChild(card);
     });
+    el.appendChild(fragmento);
   }
 
   function renderProgresso(){
     var el = document.getElementById("lista-progresso");
     el.innerHTML = "";
+    var fragmento = document.createDocumentFragment();
+    
     livros.forEach(function(livro){
       var caps = capitulosDe(livro);
       var total = caps.length;
@@ -630,15 +654,22 @@
       linha.innerHTML = '<div class="prog-nome">'+livro+' ('+lidos+'/'+total+')</div>' +
                          '<div class="prog-barra"><div class="prog-fill" style="width:'+pct+'%;"></div></div>' +
                          '<div class="prog-pct">'+pct+'%</div>';
-      el.appendChild(linha);
+      fragmento.appendChild(linha);
     });
+    el.appendChild(fragmento);
   }
 
   // ============================================================
   // PAINEL LATERAL (tabs)
   // ============================================================
-  function abrirPainel(){ document.getElementById("overlay-painel").classList.add("open"); }
-  function fecharPainel(){ document.getElementById("overlay-painel").classList.remove("open"); }
+  function abrirPainel(){ 
+    document.getElementById("overlay-painel").classList.add("open"); 
+    document.getElementById("btn-menu").setAttribute("aria-expanded", "true");
+  }
+  function fecharPainel(){ 
+    document.getElementById("overlay-painel").classList.remove("open"); 
+    document.getElementById("btn-menu").setAttribute("aria-expanded", "false");
+  }
 
   function trocarTab(tab){
     document.querySelectorAll(".painel-tabs button").forEach(function(b){
@@ -671,14 +702,17 @@
 
     var grid = document.getElementById("cores-grid");
     grid.innerHTML = "";
+    var fragmento = document.createDocumentFragment();
+    
     CORES_DESTAQUE.forEach(function(par){
       var sw = document.createElement("div");
       sw.className = "cor-sw" + (dadosUsuario.destaques[chave]===par[0] ? " ativa" : "");
       sw.style.background = par[0];
       sw.title = par[1];
       sw.onclick = function(){ aplicarDestaque(chave, par[0]); };
-      grid.appendChild(sw);
+      fragmento.appendChild(sw);
     });
+    grid.appendChild(fragmento);
 
     var favBtn = document.getElementById("btn-favoritar");
     favBtn.textContent = dadosUsuario.favoritos[chave] ? "★ Remover dos Favoritos" : "☆ Adicionar aos Favoritos";
@@ -794,6 +828,16 @@
     btn.classList.toggle("ativo", audioTocando);
   }
 
+  function configurarMediaSession(titulo) {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: titulo,
+        artist: 'Bíblia Digital Qq',
+        album: 'Leitura em Áudio'
+      });
+    }
+  }
+
   function pararAudio(){
     audioTocando = false;
     if("speechSynthesis" in window) window.speechSynthesis.cancel();
@@ -851,6 +895,7 @@
       return;
     }
     pararAudio();
+    configurarMediaSession("Versículo Selecionado");
     audioVersos = [{texto:texto}];
     audioIndice = 0;
     audioTocando = true;
@@ -870,6 +915,7 @@
     var versos = dadosBiblia.filter(function(v){ return v.livro===livroAtual && v.capitulo===capituloAtual; });
     if(!versos.length) return;
     window.speechSynthesis.cancel();
+    configurarMediaSession(livroAtual + ' ' + capituloAtual);
     audioVersos = versos;
     audioIndice = 0;
     audioTocando = true;
@@ -884,10 +930,14 @@
   // ============================================================
   function abrirBusca(){
     document.getElementById("painel-busca").classList.add("open");
+    document.getElementById("btn-busca").setAttribute("aria-expanded", "true");
     document.getElementById("input-busca").focus();
     empilharEstadoOverlay();
   }
-  function fecharBusca(){ document.getElementById("painel-busca").classList.remove("open"); }
+  function fecharBusca(){ 
+    document.getElementById("painel-busca").classList.remove("open"); 
+    document.getElementById("btn-busca").setAttribute("aria-expanded", "false");
+  }
 
   function executarBusca(termo){
     var el = document.getElementById("busca-resultados");
@@ -903,6 +953,7 @@
     }
 
     el.innerHTML = "";
+    var fragmento = document.createDocumentFragment();
 
     var contador = document.createElement("div");
     contador.style.cssText = "font-family:var(--ui);font-size:12px;letter-spacing:.5px;color:var(--ink-mute);padding:6px 2px 12px;";
@@ -911,7 +962,7 @@
       totalTexto += " (mostrando os " + achados.length + " primeiros)";
     }
     contador.textContent = totalTexto;
-    el.appendChild(contador);
+    fragmento.appendChild(contador);
 
     achados.forEach(function(v){
       var item = document.createElement("div");
@@ -921,8 +972,10 @@
         fecharBusca();
         selecionarLivro(v.livro, v.capitulo);
       };
-      el.appendChild(item);
+      fragmento.appendChild(item);
     });
+    
+    el.appendChild(fragmento);
   }
 
   // ============================================================
