@@ -781,9 +781,16 @@
     mostrarToast("Versículo copiado");
   };
 
+  function forcarPontoFinal(texto){
+    texto = texto.trim().replace(/[.,;:'"]+$/, "");
+    return texto + ".";
+  }
+
   document.getElementById("btn-compartilhar").onclick = function(){
     var v = mapaVersos[chaveSelecionada];
-    var texto = v.livro+" "+v.capitulo+":"+v.versiculo+"\n\n"+v.texto+"\n\n📖 Bíblia Digital Qq";
+    var referencia = v.livro.toUpperCase()+" "+v.capitulo+"."+v.versiculo;
+    var textoFormatado = forcarPontoFinal(v.texto);
+    var texto = referencia+"\n\n"+textoFormatado+"\n\nBíblia Digital QQ";
     var url = "https://wa.me/?text="+encodeURIComponent(texto);
     window.open(url, "_blank");
     fecharMenuVersiculo();
@@ -1256,6 +1263,7 @@
     selecionarLivro: selecionarLivro,
     selecionarCapitulo: selecionarCapitulo,
     abrirMenuVersiculo: abrirMenuVersiculo,
+    forcarPontoFinal: forcarPontoFinal,
     aplicarDestaque: aplicarDestaque,
     alternarAudioCapitulo: alternarAudioCapitulo,
     pararAudio: pararAudio,
