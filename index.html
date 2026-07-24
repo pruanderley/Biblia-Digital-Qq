@@ -17,6 +17,7 @@
 <!-- ========================================================
      Coloque o arquivo Biblia_data.js na mesma pasta deste HTML
      ======================================================== -->
+<link rel="preload" href="Biblia_data.js" as="script">
 <script src="Biblia_data.js" defer></script>
 
 <style>
@@ -37,6 +38,28 @@
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
 
   #app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ---------- TELA DE CARREGAMENTO ---------- */
+  #tela-carregamento{
+    position:fixed;inset:0;background:var(--bg-0);z-index:9999;
+    display:flex;align-items:center;justify-content:center;
+    transition:opacity .3s ease;
+  }
+  #tela-carregamento.escondida{opacity:0;pointer-events:none;}
+  .carregamento-conteudo{text-align:center;}
+  .spinner{
+    width:34px;height:34px;margin:0 auto 18px;border-radius:50%;
+    border:3px solid var(--line);border-top-color:var(--white);
+    animation:girar .8s linear infinite;
+  }
+  @keyframes girar{to{transform:rotate(360deg);}}
+  .carregamento-titulo{
+    font-family:var(--display);font-size:15px;letter-spacing:2px;font-weight:600;
+    color:var(--ink);text-transform:uppercase;
+  }
+  .carregamento-sub{
+    font-family:var(--ui);font-size:12px;color:var(--ink-mute);margin-top:6px;
+  }
 
   /* ---------- BARRA SUPERIOR ---------- */
   #topbar{
@@ -209,7 +232,17 @@
 </style>
 </head>
 <body>
+<!-- Tela de carregamento — evita a sensação de "travado" enquanto o Biblia_data.js baixa -->
+<div id="tela-carregamento">
+  <div class="carregamento-conteudo">
+    <div class="spinner"></div>
+    <div class="carregamento-titulo">BÍBLIA DIGITAL QQ</div>
+    <div class="carregamento-sub">Carregando...</div>
+  </div>
+</div>
+
 <div id="app">
+
 
   <div id="topbar">
     <button class="icon-btn" id="btn-menu" aria-expanded="false" aria-label="Livros e capítulos">☰</button>
@@ -1179,6 +1212,7 @@
   // INICIALIZAÇÃO
   // ============================================================
   function iniciar(){
+   try{
     carregarDados();
     renderListaLivros();
 
@@ -1204,6 +1238,16 @@
         }, 60);
       }
     }
+   }finally{
+    esconderTelaCarregamento();
+   }
+  }
+
+  function esconderTelaCarregamento(){
+    var tela = document.getElementById("tela-carregamento");
+    if(!tela) return;
+    tela.classList.add("escondida");
+    setTimeout(function(){ tela.remove(); }, 350);
   }
 
   // ============================================================
