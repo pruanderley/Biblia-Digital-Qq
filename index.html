@@ -43,9 +43,10 @@
   #tela-carregamento{
     position:fixed;inset:0;background:var(--bg-0);z-index:9999;
     display:flex;align-items:center;justify-content:center;
-    transition:opacity .3s ease;
+    opacity:0;pointer-events:none;
+    transition:opacity .25s ease;
   }
-  #tela-carregamento.escondida{opacity:0;pointer-events:none;}
+  #tela-carregamento.visivel{opacity:1;pointer-events:all;}
   .carregamento-conteudo{text-align:center;}
   .spinner{
     width:34px;height:34px;margin:0 auto 18px;border-radius:50%;
@@ -1243,11 +1244,24 @@
    }
   }
 
+  // Só revela a tela de carregamento se o carregamento passar de 300ms —
+  // em carregamentos rápidos ela nunca chega a aparecer (sem "pisca").
+  var LIMIAR_MOSTRAR_CARREGAMENTO = 300;
+  var _timerTelaCarregamento = setTimeout(function(){
+    var tela = document.getElementById("tela-carregamento");
+    if(tela) tela.classList.add("visivel");
+  }, LIMIAR_MOSTRAR_CARREGAMENTO);
+
   function esconderTelaCarregamento(){
+    clearTimeout(_timerTelaCarregamento);
     var tela = document.getElementById("tela-carregamento");
     if(!tela) return;
-    tela.classList.add("escondida");
-    setTimeout(function(){ tela.remove(); }, 350);
+    if(tela.classList.contains("visivel")){
+      tela.classList.remove("visivel");
+      setTimeout(function(){ tela.remove(); }, 250);
+    } else {
+      tela.remove();
+    }
   }
 
   // ============================================================
