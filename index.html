@@ -316,6 +316,8 @@
         .verse:hover { background: rgba(255,255,255,0.05); }
         .verse.selected { background: rgba(255,255,255,0.14); outline: 1px solid rgba(255,255,255,0.28); border-radius: 6px; }
         body.light .verse.selected { background: rgba(0,0,0,0.09); outline: 1px solid rgba(0,0,0,0.20); }
+        .verse.tts-reading { background: rgba(255,255,255,0.08); border-left: 3px solid var(--accent-gold); transition: background 0.3s ease; }
+        body.light .verse.tts-reading { background: rgba(0,0,0,0.05); }
         .verse .num {
             font-size: 12px;
             color: var(--accent-gold);
@@ -1087,68 +1089,241 @@ function googleAI(idx) {
 }
 
 // ====================================================================
-// ÁUDIO DO CAPÍTULO (TTS)
+// ÁUDIO DO CAPÍTULO (TTS) — Leitura contínua + segundo plano
 // ====================================================================
-async function playChapterAudio() {
-    if (state.audioPlaying) {
-        stopChapterAudio();
+let _ttsQueue = [], _ttsIdx = 0, _ttsRunning = false, _ttsContinuous = true;
+let _ttsUtterance = null, _wakeLock = null;
+let _ttsKeepaliveInterval = null, _ttsAudioCtx = null, _ttsAudioNode = null;
+
+function _hasWebSpeech() { return typeof window.speechSynthesis !== 'undefined'; }
+
+function _getBestVoice() {
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find(v => v.lang && v.lang.startsWith('pt')) || null;
+}
+
+function _buildQueue() {
+    const book = bibleData[state.bookIndex];
+    if (!book) return [];
+    const chapter = book.chapters[state.chapterIndex];
+    if (!chapter) return [];
+    return chapter.map((txt, i) => ({ text: (i+1) + '. ' + txt, vi: i }));
+}
+
+function _setAudioUI(playing, msg) {
+    const btn = document.getElementById('audio-btn');
+    const btnTop = document.getElementById('audio-btn-top');
+    if (btn) { btn.textContent = playing ? '⏹ Parar' : '🔊 Ouvir Capítulo'; btn.classList.toggle('playing', playing); }
+    if (btnTop) btnTop.classList.toggle('playing', playing);
+    if (msg) toast(msg);
+    _setupMediaSession(playing);
+}
+
+function _setupMediaSession(playing) {
+    if (!('mediaSession' in navigator)) return;
+    const book = bibleData && bibleData[state.bookIndex];
+    const title = book ? book.name + ' ' + (state.chapterIndex + 1) : 'Bíblia Digital QQ';
+    try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: title, artist: 'Bíblia Digital QQ' });
+        navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+        navigator.mediaSession.setActionHandler('play', () => { try { window.speechSynthesis.resume(); } catch(e){} });
+        navigator.mediaSession.setActionHandler('pause', () => { try { window.speechSynthesis.pause(); } catch(e){} });
+        navigator.mediaSession.setActionHandler('stop', stopChapterAudio);
+        navigator.mediaSession.setActionHandler('nexttrack', () => _ttsAdvanceChapter(1));
+        navigator.mediaSession.setActionHandler('previoustrack', () => _ttsAdvanceChapter(-1));
+    } catch(e) {}
+}
+
+// ── WAKE LOCK (impede tela de apagar) ────────────────
+async function _requestWakeLock() {
+    try { if ('wakeLock' in navigator) _wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+}
+function _releaseWakeLock() {
+    try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
+}
+
+// ── KEEPALIVE: resume a cada 500ms (WebView pausa sozinho) ──
+function _startTtsKeepalive() {
+    _stopTtsKeepalive();
+    _ttsKeepaliveInterval = setInterval(() => {
+        if (!_ttsRunning) { _stopTtsKeepalive(); return; }
+        try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
+    }, 500);
+}
+function _stopTtsKeepalive() {
+    if (_ttsKeepaliveInterval) { clearInterval(_ttsKeepaliveInterval); _ttsKeepaliveInterval = null; }
+}
+
+// ── KEEPALIVE ÁUDIO: AudioContext silencioso mantém sessão ativa ──
+function _startAudioKeepalive() {
+    if (_ttsAudioCtx) return;
+    try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        _ttsAudioCtx = new AC();
+        var osc = _ttsAudioCtx.createOscillator();
+        var gain = _ttsAudioCtx.createGain();
+        gain.gain.value = 0.001;
+        osc.connect(gain); gain.connect(_ttsAudioCtx.destination); osc.start();
+        _ttsAudioNode = osc;
+    } catch(e) {}
+}
+function _stopAudioKeepalive() {
+    try { if (_ttsAudioNode) { _ttsAudioNode.stop(); _ttsAudioNode = null; } } catch(e) {}
+    try { if (_ttsAudioCtx) { _ttsAudioCtx.close(); _ttsAudioCtx = null; } } catch(e) {}
+}
+
+// ── FALAR VERSO POR VERSO ────────────────────────────
+function _ttsSpeakNext() {
+    if (!_ttsRunning || _ttsIdx >= _ttsQueue.length) {
+        if (_ttsRunning) _ttsFinished();
         return;
     }
+    const item = _ttsQueue[_ttsIdx];
+    const utt = new SpeechSynthesisUtterance(item.text);
+    const voice = _getBestVoice();
+    if (voice) { utt.voice = voice; utt.lang = voice.lang; } else { utt.lang = 'pt-BR'; }
+    utt.rate = 0.95; utt.pitch = 1; utt.volume = 1;
+
+    utt.onstart = () => {
+        document.querySelectorAll('.verse.tts-reading').forEach(el => el.classList.remove('tts-reading'));
+        const verseEl = document.querySelector(`.verse[data-verse="${item.vi}"]`);
+        if (verseEl) {
+            verseEl.classList.add('tts-reading');
+            if (verseEl.scrollIntoView) verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
+    utt.onend = () => {
+        if (!_ttsRunning) return;
+        _ttsIdx++;
+        setTimeout(_ttsSpeakNext, 120);
+    };
+    utt.onerror = (ev) => {
+        var err = (ev && ev.error) || '';
+        if (err === 'interrupted' || err === 'canceled') return;
+        if (!_ttsRunning) return;
+        _ttsIdx++;
+        setTimeout(_ttsSpeakNext, 200);
+    };
+    _ttsUtterance = utt;
+    try { window.speechSynthesis.speak(utt); } catch(e) { _ttsFinished(); return; }
+    setTimeout(() => {
+        if (!_ttsRunning) return;
+        try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
+    }, 300);
+}
+
+// ── LEITURA CONTÍNUA: avança capítulo quando termina ──
+function _ttsFinished() {
+    if (_ttsRunning && _ttsContinuous) {
+        const book = bibleData[state.bookIndex];
+        state.chaptersRead.add(`${state.bookIndex}|${state.chapterIndex}`);
+
+        if (state.chapterIndex < book.chapters.length - 1) {
+            state.chapterIndex++;
+        } else if (state.bookIndex < bibleData.length - 1) {
+            state.bookIndex++;
+            state.chapterIndex = 0;
+        } else {
+            _ttsRunning = false;
+            _cleanup();
+            _setAudioUI(false, '🎉 Bíblia completa lida!');
+            return;
+        }
+
+        state.lastPosition = { livro: state.bookIndex, capitulo: state.chapterIndex, versiculo: 0 };
+        saveState();
+        renderBookList(); renderChapterList(); renderChapter();
+        setTimeout(() => {
+            if (!_ttsRunning) return;
+            _ttsQueue = _buildQueue(); _ttsIdx = 0;
+            _ttsSpeakNext();
+            const bookName = bibleData[state.bookIndex].name;
+            toast('📖 ' + bookName + ' ' + (state.chapterIndex + 1));
+        }, 800);
+        return;
+    }
+    _ttsRunning = false;
+    _cleanup();
+    document.querySelectorAll('.verse.tts-reading').forEach(el => el.classList.remove('tts-reading'));
+    _setAudioUI(false, '✓ Leitura concluída');
+    state.chaptersRead.add(`${state.bookIndex}|${state.chapterIndex}`);
+    saveState(); renderChapterList();
+}
+
+function _ttsAdvanceChapter(dir) {
+    const wasRunning = _ttsRunning;
+    stopChapterAudio();
+    if (dir > 0 && state.chapterIndex < bibleData[state.bookIndex].chapters.length - 1) {
+        state.chapterIndex++;
+    } else if (dir > 0 && state.bookIndex < bibleData.length - 1) {
+        state.bookIndex++; state.chapterIndex = 0;
+    } else if (dir < 0 && state.chapterIndex > 0) {
+        state.chapterIndex--;
+    } else if (dir < 0 && state.bookIndex > 0) {
+        state.bookIndex--; state.chapterIndex = bibleData[state.bookIndex].chapters.length - 1;
+    }
+    renderBookList(); renderChapterList(); renderChapter(); saveState();
+    if (wasRunning) setTimeout(playChapterAudio, 300);
+}
+
+function _cleanup() {
+    _stopTtsKeepalive(); _stopAudioKeepalive(); _releaseWakeLock();
+    try { window.speechSynthesis.cancel(); } catch(e) {}
+    _ttsUtterance = null;
+}
+
+// ── INICIAR / PARAR ──────────────────────────────────
+async function playChapterAudio() {
+    if (state.audioPlaying || _ttsRunning) { stopChapterAudio(); return; }
+    if (!_hasWebSpeech()) { toast('TTS não disponível.'); return; }
+
     const book = bibleData[state.bookIndex];
     if (!book) return;
     const verses = book.chapters[state.chapterIndex];
-    if (!verses || verses.length === 0) return;
+    if (!verses || !verses.length) return;
 
-    if (!window.speechSynthesis) {
-        toast('TTS não disponível.');
-        return;
-    }
+    try { window.speechSynthesis.cancel(); } catch(e) {}
+    _ttsQueue = _buildQueue(); _ttsIdx = 0;
+    _ttsRunning = true; state.audioPlaying = true;
 
-    state.audioPlaying = true;
-    document.getElementById('audio-btn').classList.add('playing');
-    document.getElementById('audio-btn').textContent = '⏹ Parar';
-    document.getElementById('audio-btn-top').classList.add('playing');
+    await _requestWakeLock();
+    _startAudioKeepalive();
+    _startTtsKeepalive();
+    _setAudioUI(true, '🔊 ' + book.name + ' ' + (state.chapterIndex + 1) + ' — ' + verses.length + ' versículos');
 
-    const fullText = verses.join('. ');
-    const utterance = new SpeechSynthesisUtterance(fullText);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-
-    utterance.onend = () => {
-        state.audioPlaying = false;
-        document.getElementById('audio-btn').classList.remove('playing');
-        document.getElementById('audio-btn').textContent = '🔊 Ouvir Capítulo';
-        document.getElementById('audio-btn-top').classList.remove('playing');
-        // Marcar capítulo como lido
-        state.chaptersRead.add(`${state.bookIndex}|${state.chapterIndex}`);
-        saveState();
-        renderChapterList();
-        toast('✓ Capítulo lido!');
-    };
-
-    utterance.onerror = () => {
-        state.audioPlaying = false;
-        document.getElementById('audio-btn').classList.remove('playing');
-        document.getElementById('audio-btn').textContent = '🔊 Ouvir Capítulo';
-        document.getElementById('audio-btn-top').classList.remove('playing');
-        toast('❌ Erro na reprodução.');
-    };
-
-    window.speechSynthesis.speak(utterance);
-    state.ttsUtterance = utterance;
-    toast('🔊 Reproduzindo capítulo...');
+    setTimeout(() => { if (_ttsRunning) _ttsSpeakNext(); }, 200);
 }
 
 function stopChapterAudio() {
-    if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-    }
-    state.audioPlaying = false;
-    document.getElementById('audio-btn').classList.remove('playing');
-    document.getElementById('audio-btn').textContent = '🔊 Ouvir Capítulo';
-    document.getElementById('audio-btn-top').classList.remove('playing');
+    _ttsRunning = false; state.audioPlaying = false;
+    _ttsIdx = _ttsQueue.length;
+    _cleanup();
+    document.querySelectorAll('.verse.tts-reading').forEach(el => el.classList.remove('tts-reading'));
+    _setAudioUI(false);
 }
+
+// ── SEGUNDO PLANO: retomar ao voltar / manter vivo ───
+document.addEventListener('visibilitychange', async () => {
+    if (!_ttsRunning) return;
+    if (!document.hidden) {
+        if (_wakeLock !== null) await _requestWakeLock();
+        setTimeout(() => {
+            try {
+                if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+                if (!window.speechSynthesis.speaking && _ttsIdx < _ttsQueue.length) _ttsSpeakNext();
+            } catch(e) {}
+        }, 300);
+    } else {
+        try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
+    }
+});
+
+// Keepalive global de segurança
+setInterval(() => {
+    if (!_ttsRunning) return;
+    try { if (_hasWebSpeech() && window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
+}, 5000);
 
 // ====================================================================
 // HISTÓRICO
