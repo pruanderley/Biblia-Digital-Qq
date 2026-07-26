@@ -1,52 +1,48 @@
-const CACHE_NOME = "biblia-digital-qq-v1";
-const ARQUIVOS_APP = [
-  "./index.html",
-  "./manifest.json",
-  "./Biblia_data.js",
-  "./icon-192.png",
-  "./icon-512.png"
+const CACHE_NAME = 'biblia-qq-v1';
+const urlsToCache = [
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  // Se você tiver o Biblia_data.js local, descomente a linha abaixo:
+  // './Biblia_data.js'
 ];
 
-self.addEventListener("install", function (evento) {
-  evento.waitUntil(
-    caches.open(CACHE_NOME).then(function (cache) {
-      // addAll falha se QUALQUER arquivo faltar — adiciona um a um pra não travar o install
-      // inteiro por causa de um ícone ausente, por exemplo.
-      return Promise.all(
-        ARQUIVOS_APP.map(function (url) {
-          return cache.add(url).catch(function () {});
-        })
-      );
-    })
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache))
   );
   self.skipWaiting();
 });
 
-self.addEventListener("activate", function (evento) {
-  evento.waitUntil(
-    caches.keys().then(function (nomes) {
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
       return Promise.all(
-        nomes.filter(function (n) { return n !== CACHE_NOME; })
-             .map(function (n) { return caches.delete(n); })
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
       );
     })
   );
-  self.clients.claim();
+  return self.clients.claim();
 });
 
-// Estratégia: tenta a rede primeiro (pra pegar atualizações), cai pro cache se offline
-self.addEventListener("fetch", function (evento) {
-  if (evento.request.method !== "GET") return;
-
-  evento.respondWith(
-    fetch(evento.request)
-      .then(function (resposta) {
-        var copia = resposta.clone();
-        caches.open(CACHE_NOME).then(function (cache) { cache.put(evento.request, copia); });
-        return resposta;
-      })
-      .catch(function () {
-        return caches.match(evento.request);
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        if (response) {
+          return response;
+        }
+        return fetch(event.request).catch(() => {
+          // Fallback opcional: retorna uma página offline
+          // return caches.match('./index.html');
+        });
       })
   );
 });
