@@ -131,9 +131,16 @@
             width: 0;
             border-right: none;
         }
+        /* A seção precisa ser um container flex que PODE encolher (flex:1 1 0 +
+           min-height:0). Sem isso, ela cresce com o conteúdo e o .sidebar-scroll
+           de dentro nunca chega a rolar — só é cortado pelo overflow do #sidebar. */
         .sidebar-section {
             padding: 8px 12px;
-            flex-shrink: 0;
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         .sidebar-section label {
             font-size: 12px;
@@ -141,6 +148,7 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             display: block;
+            flex-shrink: 0;
             margin-bottom: 4px;
         }
         .sidebar-scroll {
