@@ -7,6 +7,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Bíblia Digital Qq</title>
+    <!-- Coloque o Biblia_data.js na mesma pasta deste HTML -->
+    <script src="Biblia_data.js" defer></script>
+    <script src="biblia_data.js" defer></script>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
     <style>
@@ -142,7 +145,9 @@
         }
         .sidebar-scroll {
             flex: 1;
+            min-height: 0;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             padding: 0 12px 12px;
         }
         .book-btn, .chapter-btn {
@@ -321,18 +326,21 @@
             transform: translateX(-50%) scale(0.9);
             background: var(--bg-card);
             border: 1px solid var(--accent-gold);
-            border-radius: 16px;
-            padding: 12px;
+            border-radius: 18px;
+            padding: 22px 20px;
             display: none;
-            gap: 6px;
+            gap: 12px;
             flex-wrap: wrap;
             justify-content: center;
-            max-width: 360px;
-            width: 90%;
+            align-content: center;
+            max-width: 440px;
+            width: 92%;
+            min-height: 130px;
             z-index: 100;
             box-shadow: 0 8px 30px rgba(0,0,0,0.6);
             transition: all 0.25s ease;
         }
+        #verse-menu.top-position { bottom: auto; top: 20px; }
         #verse-menu.open {
             display: flex;
             transform: translateX(-50%) scale(1);
@@ -340,19 +348,19 @@
         .vm-btn {
             background: var(--bg-panel);
             border: none;
-            border-radius: 10px;
-            padding: 8px 12px;
+            border-radius: 12px;
+            padding: 13px 18px;
             color: var(--text-primary);
             font-family: var(--font-body);
-            font-size: 13px;
+            font-size: 14.5px;
             cursor: pointer;
             transition: background 0.2s;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             flex: 1 0 auto;
             justify-content: center;
-            min-width: 60px;
+            min-width: 78px;
         }
         .vm-btn:hover { background: var(--border); }
 
@@ -488,8 +496,9 @@
             #sidebar-backdrop.open { display: block; }
             #topbar h1 { font-size: 16px; }
             .chapter-grid { grid-template-columns: repeat(4, 1fr); }
-            #verse-menu { bottom: 10px; padding: 8px; }
-            .vm-btn { font-size: 12px; padding: 6px 8px; min-width: 50px; }
+            #verse-menu { bottom: 10px; padding: 16px 14px; min-height: 110px; }
+            #verse-menu.top-position { top: 10px; }
+            .vm-btn { font-size: 13px; padding: 10px 12px; min-width: 64px; }
         }
         @media (max-width: 480px) {
             #bible-text { font-size: 15px; }
@@ -576,31 +585,19 @@ let bibleData = [];
 
 // Função para carregar dados do arquivo JS (via fetch)
 async function loadBibleData() {
-    const jsFiles = ['Biblia_data.js', 'biblia_data.js', 'BibleData.js', 'bibleData.js'];
-    for (const file of jsFiles) {
-        try {
-            const resp = await fetch(file);
-            if (!resp.ok) continue;
-            const text = await resp.text();
-            // Extrai o array JS
-            const match = text.match(/(?:var|let|const)?\s*(?:bibleDataExterno|bibleData|BibleData)\s*=\s*(\[[\s\S]*?\]);?/);
-            if (match) {
-                let jsonStr = match[1];
-                // Tenta parsear como JSON
-                try {
-                    const data = JSON.parse(jsonStr);
-                    bibleData = data;
-                    return true;
-                } catch (e) {
-                    // Fallback: substitui aspas simples por duplas
-                    try {
-                        const data = JSON.parse(jsonStr.replace(/'/g, '"'));
-                        bibleData = data;
-                        return true;
-                    } catch (e2) {}
-                }
-            }
-        } catch (e) {}
+    // O Biblia_data.js é carregado via <script defer> no <head>. Como "defer"
+    // roda antes deste script inline, os dados já devem estar prontos aqui —
+    // mas esperamos um pouco (com tentativas) por segurança em conexões lentas.
+    for (let tentativa = 0; tentativa < 40; tentativa++) {
+        if (typeof bibleDataExterno !== 'undefined' && Array.isArray(bibleDataExterno)) {
+            bibleData = bibleDataExterno;
+            return true;
+        }
+        if (typeof BibleData !== 'undefined' && Array.isArray(BibleData)) {
+            bibleData = BibleData;
+            return true;
+        }
+        await new Promise(r => setTimeout(r, 50));
     }
     // Fallback: dados de emergência
     bibleData = [
@@ -855,7 +852,12 @@ function selectVerse(idx) {
 // MENU DO VERSÍCULO
 // ====================================================================
 function showVerseMenu() {
-    document.getElementById('verse-menu').classList.add('open');
+    const menu = document.getElementById('verse-menu');
+    const verses = getChapterVerses(state.bookIndex, state.chapterIndex);
+    const idx = state.lastSelectedVerse;
+    const ehUltimoVersiculo = verses && verses.length > 0 && idx !== null && idx === verses.length - 1;
+    menu.classList.toggle('top-position', ehUltimoVersiculo);
+    menu.classList.add('open');
 }
 
 function hideVerseMenu() {
