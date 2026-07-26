@@ -37,10 +37,19 @@
             --bg-secondary: #f5f5f5;
             --bg-card: #f0f0f0;
             --bg-panel: #e0e0e0;
+            /* A cor de destaque precisa INVERTER no tema claro: no escuro ela é
+               branca, e se continuasse branca aqui sumiria no fundo claro
+               (título do topo, título do capítulo, número dos versículos, etc). */
+            --accent-gold: #111111;
+            --accent-warm: #333333;
+            --accent-red: #b0b0b0;
             --text-primary: #111111;
             --text-secondary: #444444;
-            --text-muted: #777777;
-            --text-on-gold: #000000;
+            /* #777777 (herdado do tema escuro) dava só 4.11:1 sobre o fundo claro —
+               abaixo do mínimo legível. Este tom passa em todos os fundos claros. */
+            --text-muted: #636363;
+            /* Texto que fica SOBRE a cor de destaque — agora escura, então branco */
+            --text-on-gold: #ffffff;
             --border: #cccccc;
         }
 
