@@ -673,6 +673,8 @@ function saveState() {
         history: state.history,
         chaptersRead: Array.from(state.chaptersRead),
         lastPosition: state.lastPosition,
+        bookIndex: state.bookIndex,
+        chapterIndex: state.chapterIndex,
         theme: state.theme,
         fontSize: state.fontSize,
     };
@@ -692,6 +694,8 @@ function loadState() {
             state.history = saved.history || [];
             state.chaptersRead = new Set(saved.chaptersRead || []);
             state.lastPosition = saved.lastPosition || null;
+            if (saved.bookIndex !== undefined) state.bookIndex = saved.bookIndex;
+            if (saved.chapterIndex !== undefined) state.chapterIndex = saved.chapterIndex;
             state.theme = saved.theme || 'dark';
             state.fontSize = saved.fontSize || 16;
         }
@@ -738,11 +742,13 @@ function renderBookList() {
             state.chapterIndex = 0;
             state.selectedVerses = [];
             state.lastSelectedVerse = null;
+            // Salva a posição ao trocar de livro
+            state.lastPosition = { livro: i, capitulo: 0, versiculo: 0 };
             renderBookList();
             renderChapterList();
             renderChapter();
             saveState();
-            if (window.innerWidth <= 768) closeSidebar();
+            // NÃO fecha a sidebar aqui — usuário ainda precisa escolher o capítulo
         });
         container.appendChild(btn);
     });
@@ -773,6 +779,8 @@ function renderChapterList() {
             state.chapterIndex = ci;
             state.selectedVerses = [];
             state.lastSelectedVerse = null;
+            // Salva a posição imediatamente ao trocar de capítulo
+            state.lastPosition = { livro: state.bookIndex, capitulo: ci, versiculo: 0 };
             renderBookList();
             renderChapterList();
             renderChapter();
@@ -847,7 +855,7 @@ function renderChapter() {
         if (vers !== undefined) {
             const target = container.querySelector(`.verse[data-verse="${vers}"]`);
             if (target) {
-                setTimeout(() => target.scrollIntoView({ block: 'center' }), 100);
+                setTimeout(() => { if (target.scrollIntoView) target.scrollIntoView({ block: 'center' }); }, 100);
             }
         }
     }
@@ -1206,7 +1214,7 @@ document.getElementById('btn-favoritos').addEventListener('click', () => {
                 closeModal();
                 setTimeout(() => {
                     const target = document.querySelector(`.verse[data-verse="${v}"]`);
-                    if (target) target.scrollIntoView({ block: 'center' });
+                    if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center' });
                 }, 150);
             });
         });
@@ -1379,7 +1387,7 @@ function performSearch() {
             fecharBusca();
             setTimeout(() => {
                 const target = document.querySelector(`.verse[data-verse="${el.dataset.vi}"]`);
-                if (target) target.scrollIntoView({ block: 'center' });
+                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center' });
             }, 150);
         });
     });
@@ -1467,13 +1475,23 @@ async function init() {
 
     // Se tiver última posição, vai para lá
     if (state.lastPosition) {
-        state.bookIndex = state.lastPosition.livro;
-        state.chapterIndex = state.lastPosition.capitulo;
+        const lp = state.lastPosition;
+        if (lp.livro !== undefined) state.bookIndex = lp.livro;
+        if (lp.capitulo !== undefined) state.chapterIndex = lp.capitulo;
     }
 
     renderBookList();
     renderChapterList();
     renderChapter();
+
+    // Rola até o versículo exato onde parou
+    if (state.lastPosition && state.lastPosition.versiculo !== undefined && state.lastPosition.versiculo > 0) {
+        const vi = state.lastPosition.versiculo;
+        setTimeout(() => {
+            const target = document.querySelector(`.verse[data-verse="${vi}"]`);
+            if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'instant' });
+        }, 120);
+    }
 
     // Fechar menu ao clicar fora
     document.addEventListener('click', (e) => {
