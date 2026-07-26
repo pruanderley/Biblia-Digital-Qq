@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -314,7 +314,8 @@
             margin-bottom: 2px;
         }
         .verse:hover { background: rgba(255,255,255,0.05); }
-        .verse.selected { background: rgba(255,255,255,0.12); outline: 1px solid rgba(255,255,255,0.2); }
+        .verse.selected { background: rgba(255,255,255,0.14); outline: 1px solid rgba(255,255,255,0.28); border-radius: 6px; }
+        body.light .verse.selected { background: rgba(0,0,0,0.09); outline: 1px solid rgba(0,0,0,0.20); }
         .verse .num {
             font-size: 12px;
             color: var(--accent-gold);
@@ -556,16 +557,19 @@
                 <button class="action-btn primary" id="btn-favoritos">★ Favoritos</button>
                 <button class="action-btn" id="btn-historico">🕑 Histórico</button>
                 <button class="action-btn" id="btn-progresso">📊 Progresso</button>
+                <button class="action-btn" id="audio-btn">🔊 Ouvir Capítulo</button>
+            </div>
+
+            <!-- Zoom de fonte na sidebar -->
+            <div style="padding:0 12px 12px;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;color:var(--text-muted);margin-right:2px;">Fonte:</span>
+                <button id="font-dec" style="width:34px;height:28px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:14px;font-weight:bold;">A−</button>
+                <button id="font-inc" style="width:34px;height:28px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:14px;font-weight:bold;">A+</button>
             </div>
         </aside>
 
         <!-- Content -->
         <section id="content">
-            <div id="content-top">
-                <input id="search-input" type="text" placeholder="Pesquisar..." autocomplete="off">
-                <button id="search-btn">Buscar</button>
-                <button id="audio-btn">🔊 Ouvir Capítulo</button>
-            </div>
             <div id="bible-text"></div>
         </section>
     </div>
@@ -579,7 +583,8 @@
     <button class="vm-btn" data-action="copy">📋 Copiar</button>
     <button class="vm-btn" data-action="share">↗ Compartilhar</button>
     <button class="vm-btn" data-action="listen">🔊 Ouvir</button>
-    <button class="vm-btn" data-action="google">✨ Google IA</button>
+    <button class="vm-btn" data-action="google">🔎 Google IA</button>
+    <button class="vm-btn" data-action="search">🔍 Pesquisar</button>
 </div>
 
 <!-- Modal genérico -->
@@ -588,6 +593,19 @@
         <button class="close-btn" id="modal-close">✕</button>
         <h2 id="modal-title">Título</h2>
         <div id="modal-body"></div>
+    </div>
+</div>
+
+<!-- Modal de busca -->
+<div id="search-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:flex-start;justify-content:center;padding-top:60px;">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:14px;width:92%;max-width:500px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);">
+            <input id="search-input" type="text" placeholder="Pesquisar palavra ou frase..." autocomplete="off"
+                style="flex:1;padding:9px 12px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;">
+            <button id="search-btn" style="padding:9px 14px;background:var(--accent-gold);color:var(--text-on-gold);border:none;border-radius:8px;font-size:13px;cursor:pointer;">Buscar</button>
+            <button id="search-close" style="padding:9px 12px;background:var(--bg-card);color:var(--text-muted);border:1px solid var(--border);border-radius:8px;cursor:pointer;">✕</button>
+        </div>
+        <div id="search-results" style="flex:1;overflow-y:auto;padding:10px 16px;"></div>
     </div>
 </div>
 
@@ -916,6 +934,9 @@ document.querySelectorAll('#verse-menu .vm-btn').forEach(btn => {
                 break;
             case 'google':
                 googleAI(firstIdx);
+                break;
+            case 'search':
+                abrirBusca();
                 break;
         }
         hideVerseMenu();
@@ -1254,15 +1275,77 @@ document.getElementById('btn-progresso').addEventListener('click', () => {
 // BUSCA
 // ====================================================================
 document.getElementById('search-btn').addEventListener('click', performSearch);
+document.getElementById('font-inc').addEventListener('click', () => {
+    state.fontSize = Math.min(28, state.fontSize + 1);
+    document.getElementById('bible-text').style.fontSize = state.fontSize + 'px';
+    saveState();
+});
+document.getElementById('font-dec').addEventListener('click', () => {
+    state.fontSize = Math.max(11, state.fontSize - 1);
+    document.getElementById('bible-text').style.fontSize = state.fontSize + 'px';
+    saveState();
+});
+
+// ── ZOOM POR PINÇA NA FONTE (dois dedos na área de leitura) ────────────
+(function(){
+    var el = document.getElementById('bible-text');
+    var startDist = 0, startSize = 16, pinching = false;
+
+    function dist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
+    function aplicar(px){
+        px = Math.round(Math.max(11, Math.min(28, px)));
+        if(px !== state.fontSize){
+            state.fontSize = px;
+            document.getElementById('bible-text').style.fontSize = px + 'px';
+        }
+    }
+
+    el.addEventListener('touchstart', function(e){
+        if(e.touches.length === 2){
+            pinching = true;
+            startDist = dist(e.touches);
+            startSize = state.fontSize;
+            e.preventDefault();
+        }
+    }, {passive:false});
+
+    el.addEventListener('touchmove', function(e){
+        if(!pinching || e.touches.length !== 2) return;
+        e.preventDefault();
+        aplicar(startSize * dist(e.touches) / startDist);
+    }, {passive:false});
+
+    el.addEventListener('touchend', function(e){
+        if(e.touches.length < 2 && pinching){
+            pinching = false;
+            saveState();
+        }
+    }, {passive:true});
+})();
+document.getElementById('search-close').addEventListener('click', fecharBusca);
+document.getElementById('search-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('search-overlay')) fecharBusca();
+});
 document.getElementById('search-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') performSearch();
+    if (e.key === 'Escape') fecharBusca();
 });
+
+function abrirBusca() {
+    const overlay = document.getElementById('search-overlay');
+    overlay.style.display = 'flex';
+    setTimeout(() => document.getElementById('search-input').focus(), 50);
+}
+function fecharBusca() {
+    document.getElementById('search-overlay').style.display = 'none';
+    document.getElementById('search-results').innerHTML = '';
+}
 
 function performSearch() {
     const term = document.getElementById('search-input').value.trim().toLowerCase();
     if (!term) return;
 
-    const container = document.getElementById('bible-text');
+    const container = document.getElementById('search-results');
     let results = [];
     bibleData.forEach((book, bi) => {
         book.chapters.forEach((chap, ci) => {
@@ -1275,26 +1358,25 @@ function performSearch() {
     });
 
     if (results.length === 0) {
-        container.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:40px;">Nenhum resultado para "${term}".</div>`;
+        container.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:30px;">Nenhum resultado para "${term}".</div>`;
         return;
     }
 
-    let html = `<div class="chapter-title">🔍 Resultados para "${term}"</div>`;
+    let html = `<div style="font-size:12px;color:var(--text-muted);padding:0 0 10px;">${results.length} resultado${results.length!==1?'s':''} encontrado${results.length!==1?'s':''}</div>`;
     results.forEach(r => {
-        const highlight = r.text.replace(new RegExp(`(${term})`, 'gi'), '<mark>$1</mark>');
-        html += `<div class="verse" style="cursor:pointer;padding:8px;border-bottom:1px solid var(--border);" data-bi="${r.bi}" data-ci="${r.ci}" data-vi="${r.vi}">
-            <span style="font-weight:600;">${r.book} ${r.ci+1}:${r.vi+1}</span><br>
-            <span>${highlight}</span>
+        const highlight = r.text.replace(new RegExp(`(${term})`, 'gi'), '<mark style="background:#fdf6d9;color:#111;">$1</mark>');
+        html += `<div style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;" data-bi="${r.bi}" data-ci="${r.ci}" data-vi="${r.vi}">
+            <div style="font-weight:600;font-size:12px;color:var(--accent-gold);margin-bottom:3px;">${r.book} ${r.ci+1}:${r.vi+1}</div>
+            <div style="font-size:15px;line-height:1.5;">${highlight}</div>
         </div>`;
     });
     container.innerHTML = html;
-    container.querySelectorAll('.verse').forEach(el => {
+    container.querySelectorAll('[data-bi]').forEach(el => {
         el.addEventListener('click', () => {
             state.bookIndex = parseInt(el.dataset.bi);
             state.chapterIndex = parseInt(el.dataset.ci);
-            renderBookList();
-            renderChapterList();
-            renderChapter();
+            renderBookList(); renderChapterList(); renderChapter();
+            fecharBusca();
             setTimeout(() => {
                 const target = document.querySelector(`.verse[data-verse="${el.dataset.vi}"]`);
                 if (target) target.scrollIntoView({ block: 'center' });
