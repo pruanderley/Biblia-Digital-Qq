@@ -989,6 +989,9 @@ function openHighlightPicker(key) {
             } else {
                 state.highlights[key] = color;
             }
+            // Limpa a seleção pra não cobrir a cor do destaque
+            state.selectedVerses = [];
+            state.lastSelectedVerse = null;
             saveState();
             renderChapter(true);
             closeModal();
@@ -1005,6 +1008,8 @@ function toggleFavorite(key) {
         state.favorites[key] = true;
         toast('★ Adicionado aos favoritos!');
     }
+    state.selectedVerses = [];
+    state.lastSelectedVerse = null;
     saveState();
     renderChapter(true);
 }
@@ -1025,6 +1030,7 @@ function openNoteEditor(key) {
         const text = document.getElementById('note-text').value.trim();
         if (text) state.notes[key] = text;
         else delete state.notes[key];
+        state.selectedVerses = []; state.lastSelectedVerse = null;
         saveState();
         renderChapter(true);
         closeModal();
@@ -1032,6 +1038,7 @@ function openNoteEditor(key) {
     });
     document.getElementById('note-delete').addEventListener('click', () => {
         delete state.notes[key];
+        state.selectedVerses = []; state.lastSelectedVerse = null;
         saveState();
         renderChapter(true);
         closeModal();
