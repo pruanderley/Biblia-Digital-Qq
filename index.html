@@ -964,6 +964,10 @@ document.querySelectorAll('#verse-menu .vm-btn').forEach(btn => {
 // FUNÇÕES DO MENU
 // ====================================================================
 function openHighlightPicker(key) {
+    // Captura todos os selecionados ANTES de qualquer limpeza
+    const allKeys = state.selectedVerses.map(vi => `${state.bookIndex}|${state.chapterIndex}|${vi}`);
+    if (allKeys.length === 0) allKeys.push(key); // fallback: pelo menos o que foi passado
+
     const body = document.getElementById('modal-body');
     const colors = [
         ['yellow', '#f5d040'], ['red', '#f06060'], ['green', '#4cc878'],
@@ -978,40 +982,48 @@ function openHighlightPicker(key) {
         html += `<div class="color-swatch${active}" style="background:${hex};" data-color="${name}" title="${name}"></div>`;
     });
     html += '</div>';
-    body.innerHTML = html;
+    const countLabel = allKeys.length > 1 ? `<div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:8px;">${allKeys.length} versículos selecionados</div>` : '';
+    body.innerHTML = html + countLabel;
     openModal('Destacar Versículo');
 
     body.querySelectorAll('.color-swatch').forEach(el => {
         el.addEventListener('click', () => {
             const color = el.dataset.color;
-            if (color === 'none') {
-                delete state.highlights[key];
-            } else {
-                state.highlights[key] = color;
-            }
-            // Limpa a seleção pra não cobrir a cor do destaque
+            allKeys.forEach(k => {
+                if (color === 'none') { delete state.highlights[k]; }
+                else { state.highlights[k] = color; }
+            });
             state.selectedVerses = [];
             state.lastSelectedVerse = null;
             saveState();
             renderChapter(true);
             closeModal();
-            toast(color === 'none' ? 'Destaque removido' : 'Versículo destacado!');
+            const msg = color === 'none'
+                ? (allKeys.length > 1 ? allKeys.length + ' destaques removidos' : 'Destaque removido')
+                : (allKeys.length > 1 ? allKeys.length + ' versículos destacados!' : 'Versículo destacado!');
+            toast(msg);
         });
     });
 }
 
 function toggleFavorite(key) {
-    if (state.favorites[key]) {
-        delete state.favorites[key];
-        toast('Removido dos favoritos');
-    } else {
-        state.favorites[key] = true;
-        toast('★ Adicionado aos favoritos!');
-    }
+    const allKeys = state.selectedVerses.map(vi => `${state.bookIndex}|${state.chapterIndex}|${vi}`);
+    if (allKeys.length === 0) allKeys.push(key);
+
+    // Se o primeiro já é favorito, remove todos; senão, adiciona todos
+    const removing = !!state.favorites[allKeys[0]];
+    allKeys.forEach(k => {
+        if (removing) delete state.favorites[k];
+        else state.favorites[k] = true;
+    });
     state.selectedVerses = [];
     state.lastSelectedVerse = null;
     saveState();
     renderChapter(true);
+    const msg = removing
+        ? (allKeys.length > 1 ? allKeys.length + ' removidos dos favoritos' : 'Removido dos favoritos')
+        : (allKeys.length > 1 ? '★ ' + allKeys.length + ' adicionados aos favoritos!' : '★ Adicionado aos favoritos!');
+    toast(msg);
 }
 
 function openNoteEditor(key) {
