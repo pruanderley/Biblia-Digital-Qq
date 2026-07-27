@@ -900,8 +900,9 @@ function showVerseMenu() {
     const menu = document.getElementById('verse-menu');
     const verses = getChapterVerses(state.bookIndex, state.chapterIndex);
     const idx = state.lastSelectedVerse;
-    const ehUltimoVersiculo = verses && verses.length > 0 && idx !== null && idx === verses.length - 1;
-    menu.classList.toggle('top-position', ehUltimoVersiculo);
+    const totalVerses = verses ? verses.length : 0;
+    const ehUltimos3 = totalVerses > 0 && idx !== null && idx >= totalVerses - 3;
+    menu.classList.toggle('top-position', ehUltimos3);
     menu.classList.add('open');
 }
 
@@ -1616,9 +1617,16 @@ document.getElementById('bible-text').addEventListener('scroll', () => {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
         const container = document.getElementById('bible-text');
-        const firstVisible = container.querySelector('.verse');
-        if (firstVisible) {
-            const idx = parseInt(firstVisible.dataset.verse);
+        const containerTop = container.getBoundingClientRect().top;
+        const verses = container.querySelectorAll('.verse');
+        let bestVerse = null;
+        for (let i = 0; i < verses.length; i++) {
+            const top = verses[i].getBoundingClientRect().top - containerTop;
+            if (top <= 30) bestVerse = verses[i];
+            else break;
+        }
+        if (bestVerse) {
+            const idx = parseInt(bestVerse.dataset.verse);
             state.lastPosition = {
                 livro: state.bookIndex,
                 capitulo: state.chapterIndex,
@@ -1634,6 +1642,31 @@ document.getElementById('bible-text').addEventListener('scroll', () => {
         }
     }, 500);
 });
+
+// Salva posição ao minimizar/fechar o app (backup caso o scroll não tenha disparado)
+function _salvarPosicaoAtual() {
+    const container = document.getElementById('bible-text');
+    if (!container) return;
+    const containerTop = container.getBoundingClientRect().top;
+    const verses = container.querySelectorAll('.verse');
+    let bestVerse = null;
+    for (let i = 0; i < verses.length; i++) {
+        const top = verses[i].getBoundingClientRect().top - containerTop;
+        if (top <= 30) bestVerse = verses[i];
+        else break;
+    }
+    if (bestVerse) {
+        state.lastPosition = {
+            livro: state.bookIndex,
+            capitulo: state.chapterIndex,
+            versiculo: parseInt(bestVerse.dataset.verse)
+        };
+        saveState();
+    }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) _salvarPosicaoAtual(); });
+window.addEventListener('pagehide', _salvarPosicaoAtual);
+window.addEventListener('beforeunload', _salvarPosicaoAtual);
 
 // ====================================================================
 // INICIALIZAÇÃO
