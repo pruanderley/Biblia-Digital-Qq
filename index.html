@@ -852,8 +852,8 @@ function renderChapter(preservarScroll) {
     // Marcar capítulo como lido se estiver no final (scroll)
     // (já será feito pelo monitor de scroll)
 
-    // Restaurar posição de leitura
-    if (state.lastPosition && state.lastPosition.livro === state.bookIndex && state.lastPosition.capitulo === state.chapterIndex) {
+    // Restaurar posição de leitura (só quando NÃO é redesenho por marcação)
+    if (!preservarScroll && state.lastPosition && state.lastPosition.livro === state.bookIndex && state.lastPosition.capitulo === state.chapterIndex) {
         const vers = state.lastPosition.versiculo;
         if (vers !== undefined) {
             const target = container.querySelector(`.verse[data-verse="${vers}"]`);
