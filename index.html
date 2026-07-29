@@ -6,7 +6,9 @@
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <title>Bíblia Digital Qq</title>
+    <title>Bíblia Digital QQ</title>
+    <!-- Google Identity Services (login com Google) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Coloque o Biblia_data.js na mesma pasta deste HTML -->
     <script src="Biblia_data.js" defer></script>
     <script src="biblia_data.js" defer></script>
@@ -538,6 +540,7 @@
         <div id="topbar-controls">
             <button id="theme-toggle" class="top-btn" aria-label="Tema">🌙</button>
             <button id="audio-btn-top" class="top-btn" aria-label="Ouvir capítulo">🔊</button>
+            <button id="btn-conta" class="top-btn" aria-label="Conta Google" title="Entrar com Google">👤</button>
         </div>
     </header>
 
@@ -1760,6 +1763,239 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
+
+// ====================================================================
+// GOOGLE DRIVE BACKUP — Login + Backup automático + Restauração
+// ====================================================================
+const GDRIVE_CLIENT_ID = '1000921811541-egqnpp1t5u01npm7npue0gio010lkhlf.apps.googleusercontent.com';
+const GDRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+const GDRIVE_BACKUP_FILE = 'biblia_qq_backup.json';
+let _gdriveToken = null;
+let _gdriveEmail = null;
+let _gdriveBackupTimeout = null;
+let _gdriveFileId = null; // ID do arquivo de backup no Drive
+
+function _gdriveUpdateUI() {
+    const btn = document.getElementById('btn-conta');
+    if (!btn) return;
+    if (_gdriveToken && _gdriveEmail) {
+        const nome = _gdriveEmail.split('@')[0];
+        btn.textContent = '✅';
+        btn.title = 'Logado: ' + _gdriveEmail;
+        toast('☁️ Conectado: ' + nome);
+    } else {
+        btn.textContent = '👤';
+        btn.title = 'Entrar com Google';
+    }
+}
+
+function gdriveLogin() {
+    if (_gdriveToken) {
+        // Já logado — perguntar se quer sair
+        if (confirm('Logado como ' + _gdriveEmail + '.\n\nDeseja sair?')) {
+            _gdriveToken = null; _gdriveEmail = null; _gdriveFileId = null;
+            localStorage.removeItem('gdrive_email');
+            google.accounts.oauth2.revoke(_gdriveToken);
+            _gdriveUpdateUI();
+            toast('Conta desconectada');
+        }
+        return;
+    }
+    if (typeof google === 'undefined' || !google.accounts) {
+        toast('Serviço do Google não carregou.\nVerifique sua conexão.');
+        return;
+    }
+    const client = google.accounts.oauth2.initTokenClient({
+        client_id: GDRIVE_CLIENT_ID,
+        scope: GDRIVE_SCOPES,
+        callback: async (resp) => {
+            if (resp.error) {
+                toast('Erro no login: ' + (resp.error_description || resp.error));
+                return;
+            }
+            _gdriveToken = resp.access_token;
+            // Pega o email do usuário
+            try {
+                const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: 'Bearer ' + _gdriveToken }
+                });
+                const data = await info.json();
+                _gdriveEmail = data.email || 'Usuário';
+                localStorage.setItem('gdrive_email', _gdriveEmail);
+            } catch(e) {
+                _gdriveEmail = 'Usuário';
+            }
+            _gdriveUpdateUI();
+            // Restaurar backup ao fazer login
+            await gdriveRestore();
+            // Salvar backup imediatamente (mescla dados locais com o que veio do Drive)
+            gdriveScheduleBackup();
+        }
+    });
+    client.requestAccessToken();
+}
+
+// ── ENCONTRAR OU CRIAR O ARQUIVO DE BACKUP ────────────────
+async function _gdriveFindFile() {
+    if (_gdriveFileId) return _gdriveFileId;
+    try {
+        const resp = await fetch(
+            'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27' + GDRIVE_BACKUP_FILE + '%27&fields=files(id,name)',
+            { headers: { Authorization: 'Bearer ' + _gdriveToken } }
+        );
+        const data = await resp.json();
+        if (data.files && data.files.length > 0) {
+            _gdriveFileId = data.files[0].id;
+            return _gdriveFileId;
+        }
+    } catch(e) {}
+    return null;
+}
+
+async function _gdriveCreateFile(content) {
+    const metadata = { name: GDRIVE_BACKUP_FILE, parents: ['appDataFolder'] };
+    const boundary = '---biblia_qq_boundary---';
+    const body = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+        + JSON.stringify(metadata) + '\r\n--' + boundary + '\r\nContent-Type: application/json\r\n\r\n'
+        + content + '\r\n--' + boundary + '--';
+    try {
+        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer ' + _gdriveToken,
+                'Content-Type': 'multipart/related; boundary=' + boundary
+            },
+            body: body
+        });
+        const data = await resp.json();
+        _gdriveFileId = data.id;
+        return _gdriveFileId;
+    } catch(e) { return null; }
+}
+
+async function _gdriveUpdateFile(content) {
+    const fileId = await _gdriveFindFile();
+    if (!fileId) return _gdriveCreateFile(content);
+    try {
+        await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
+            method: 'PATCH',
+            headers: {
+                Authorization: 'Bearer ' + _gdriveToken,
+                'Content-Type': 'application/json'
+            },
+            body: content
+        });
+        return fileId;
+    } catch(e) { return null; }
+}
+
+// ── BACKUP: salvar no Drive ────────────────────────────────
+function gdriveScheduleBackup() {
+    if (!_gdriveToken) return;
+    clearTimeout(_gdriveBackupTimeout);
+    _gdriveBackupTimeout = setTimeout(async () => {
+        try {
+            const backupData = {
+                highlights: state.highlights,
+                favorites: state.favorites,
+                notes: state.notes,
+                history: state.history,
+                chaptersRead: Array.from(state.chaptersRead),
+                lastPosition: state.lastPosition,
+                bookIndex: state.bookIndex,
+                chapterIndex: state.chapterIndex,
+                theme: state.theme,
+                fontSize: state.fontSize,
+                backupDate: new Date().toISOString(),
+                appVersion: 'Biblia Digital QQ'
+            };
+            const json = JSON.stringify(backupData);
+            await _gdriveUpdateFile(json);
+            console.log('☁️ Backup salvo no Drive');
+        } catch(e) {
+            console.log('Erro no backup:', e);
+        }
+    }, 3000); // Espera 3s de inatividade antes de enviar (evita muitas chamadas)
+}
+
+// ── RESTAURAR: ler do Drive ────────────────────────────────
+async function gdriveRestore() {
+    if (!_gdriveToken) return;
+    try {
+        const fileId = await _gdriveFindFile();
+        if (!fileId) {
+            console.log('☁️ Nenhum backup encontrado — primeiro uso');
+            return;
+        }
+        const resp = await fetch(
+            'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
+            { headers: { Authorization: 'Bearer ' + _gdriveToken } }
+        );
+        if (!resp.ok) return;
+        const backup = await resp.json();
+
+        // Mescla: dados do Drive têm prioridade, mas dados locais que não existem no Drive são preservados
+        let mudou = false;
+        if (backup.highlights && Object.keys(backup.highlights).length > 0) {
+            Object.assign(state.highlights, backup.highlights);
+            mudou = true;
+        }
+        if (backup.favorites && Object.keys(backup.favorites).length > 0) {
+            Object.assign(state.favorites, backup.favorites);
+            mudou = true;
+        }
+        if (backup.notes && Object.keys(backup.notes).length > 0) {
+            Object.assign(state.notes, backup.notes);
+            mudou = true;
+        }
+        if (backup.history && backup.history.length > 0) {
+            // Une os dois históricos, sem duplicata (por livro+cap)
+            const hist = [...backup.history];
+            state.history.forEach(h => {
+                if (!hist.find(x => x.livro === h.livro && x.capitulo === h.capitulo)) hist.push(h);
+            });
+            state.history = hist.slice(0, 50);
+            mudou = true;
+        }
+        if (backup.chaptersRead) {
+            backup.chaptersRead.forEach(c => state.chaptersRead.add(c));
+            mudou = true;
+        }
+        if (backup.lastPosition) {
+            state.lastPosition = backup.lastPosition;
+            if (backup.bookIndex !== undefined) state.bookIndex = backup.bookIndex;
+            if (backup.chapterIndex !== undefined) state.chapterIndex = backup.chapterIndex;
+            mudou = true;
+        }
+        if (backup.theme) state.theme = backup.theme;
+        if (backup.fontSize) state.fontSize = backup.fontSize;
+
+        if (mudou) {
+            saveState();
+            renderBookList(); renderChapterList(); renderChapter();
+            if (state.theme === 'light') {
+                document.body.classList.add('light');
+                document.getElementById('theme-toggle').textContent = '☀️';
+            }
+            document.getElementById('bible-text').style.fontSize = state.fontSize + 'px';
+            toast('☁️ Dados restaurados do backup!');
+            console.log('☁️ Backup restaurado do Drive (data: ' + (backup.backupDate || '?') + ')');
+        }
+    } catch(e) {
+        console.log('Erro ao restaurar:', e);
+    }
+}
+
+// ── HOOKS: backup automático ao mudar dados ────────────────
+// Sobrescreve saveState pra disparar backup no Drive automaticamente
+const _originalSaveState = saveState;
+saveState = function() {
+    _originalSaveState();
+    gdriveScheduleBackup();
+};
+
+// ── BOTÃO DE CONTA ──────────────────────────────────────────
+document.getElementById('btn-conta').addEventListener('click', gdriveLogin);
 </script>
 </body>
 </html>
