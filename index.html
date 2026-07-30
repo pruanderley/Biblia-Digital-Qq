@@ -1807,6 +1807,7 @@ function gdriveLogin() {
             const tokenParaRevogar = _gdriveToken;
             _gdriveToken = null; _gdriveEmail = null; _gdriveFileId = null;
             localStorage.removeItem('gdrive_email');
+            localStorage.removeItem('gdrive_token');
             try { google.accounts.oauth2.revoke(tokenParaRevogar); } catch(e) {}
             _gdriveUpdateUI();
             toast('Conta desconectada');
@@ -1826,6 +1827,7 @@ function gdriveLogin() {
                 return;
             }
             _gdriveToken = resp.access_token;
+            localStorage.setItem('gdrive_token', _gdriveToken);
             // Pega o email do usuário
             try {
                 const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -2009,35 +2011,32 @@ saveState = function() {
 // ── BOTÃO DE CONTA ──────────────────────────────────────────
 document.getElementById('btn-conta').addEventListener('click', gdriveLogin);
 
-// ── AUTO-RECONNECT: se já logou antes, tenta login silencioso ao abrir ──
+// ── AUTO-RECONNECT: usa o token salvo (sem popup) ──────────
 (function _autoReconnect() {
+    const savedToken = localStorage.getItem('gdrive_token');
     const savedEmail = localStorage.getItem('gdrive_email');
-    if (!savedEmail) return;
-    _gdriveEmail = savedEmail;
-    // Espera o Google Identity Services carregar
-    function _tryAutoLogin() {
-        if (typeof google === 'undefined' || !google.accounts) {
-            setTimeout(_tryAutoLogin, 500);
-            return;
+    if (!savedToken || !savedEmail) return;
+
+    // Testa se o token ainda é válido com uma chamada leve
+    fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: 'Bearer ' + savedToken }
+    }).then(r => {
+        if (r.ok) {
+            _gdriveToken = savedToken;
+            _gdriveEmail = savedEmail;
+            const btn = document.getElementById('btn-conta');
+            if (btn) { btn.style.color = '#4CAF50'; btn.title = 'Logado: ' + _gdriveEmail; }
+            console.log('☁️ Reconectado automaticamente: ' + savedEmail);
+            // Restaura backup silenciosamente
+            gdriveRestore();
+        } else {
+            // Token expirou — limpa, usuário clica quando quiser
+            localStorage.removeItem('gdrive_token');
+            console.log('☁️ Token expirado — toque em 👤 para reconectar');
         }
-        const client = google.accounts.oauth2.initTokenClient({
-            client_id: GDRIVE_CLIENT_ID,
-            scope: GDRIVE_SCOPES,
-            prompt: '', // login silencioso (sem popup se já autorizou)
-            callback: async (resp) => {
-                if (resp.error || !resp.access_token) {
-                    console.log('Auto-reconnect: precisa de login manual');
-                    return;
-                }
-                _gdriveToken = resp.access_token;
-                _gdriveUpdateUI();
-                await gdriveRestore();
-                gdriveScheduleBackup();
-            }
-        });
-        client.requestAccessToken();
-    }
-    setTimeout(_tryAutoLogin, 1500); // dá tempo do GIS carregar
+    }).catch(() => {
+        console.log('☁️ Sem internet — backup offline mantido');
+    });
 })();
 </script>
 </body>
