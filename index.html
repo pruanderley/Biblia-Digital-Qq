@@ -7,8 +7,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Bíblia Digital QQ</title>
-    <!-- Google Identity Services (login com Google) -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Coloque o Biblia_data.js na mesma pasta deste HTML -->
     <script src="Biblia_data.js" defer></script>
     <script src="biblia_data.js" defer></script>
@@ -39,18 +37,12 @@
             --bg-secondary: #f5f5f5;
             --bg-card: #f0f0f0;
             --bg-panel: #e0e0e0;
-            /* A cor de destaque precisa INVERTER no tema claro: no escuro ela é
-               branca, e se continuasse branca aqui sumiria no fundo claro
-               (título do topo, título do capítulo, número dos versículos, etc). */
             --accent-gold: #111111;
             --accent-warm: #333333;
             --accent-red: #b0b0b0;
             --text-primary: #111111;
             --text-secondary: #444444;
-            /* #777777 (herdado do tema escuro) dava só 4.11:1 sobre o fundo claro —
-               abaixo do mínimo legível. Este tom passa em todos os fundos claros. */
             --text-muted: #636363;
-            /* Texto que fica SOBRE a cor de destaque — agora escura, então branco */
             --text-on-gold: #ffffff;
             --border: #cccccc;
         }
@@ -142,9 +134,6 @@
             width: 0;
             border-right: none;
         }
-        /* A seção precisa ser um container flex que PODE encolher (flex:1 1 0 +
-           min-height:0). Sem isso, ela cresce com o conteúdo e o .sidebar-scroll
-           de dentro nunca chega a rolar — só é cortado pelo overflow do #sidebar. */
         .sidebar-section {
             padding: 8px 12px;
             flex: 1 1 0;
@@ -540,7 +529,6 @@
         <div id="topbar-controls">
             <button id="theme-toggle" class="top-btn" aria-label="Tema">🌙</button>
             <button id="audio-btn-top" class="top-btn" aria-label="Ouvir capítulo">🔊</button>
-            <button id="btn-conta" class="top-btn" aria-label="Conta Google" title="Entrar com Google">👤</button>
         </div>
     </header>
 
@@ -623,11 +611,7 @@
 // ====================================================================
 let bibleData = [];
 
-// Função para carregar dados do arquivo JS (via fetch)
 async function loadBibleData() {
-    // O Biblia_data.js é carregado via <script defer> no <head>. Como "defer"
-    // roda antes deste script inline, os dados já devem estar prontos aqui —
-    // mas esperamos um pouco (com tentativas) por segurança em conexões lentas.
     for (let tentativa = 0; tentativa < 40; tentativa++) {
         if (typeof bibleDataExterno !== 'undefined' && Array.isArray(bibleDataExterno)) {
             bibleData = bibleDataExterno;
@@ -639,7 +623,6 @@ async function loadBibleData() {
         }
         await new Promise(r => setTimeout(r, 50));
     }
-    // Fallback: dados de emergência
     bibleData = [
         { name: "Gênesis", chapters: [["No princípio, criou Deus os céus e a terra.", "E a terra era sem forma e vazia."]] },
         { name: "João", chapters: [["Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito."]] }
@@ -653,14 +636,14 @@ async function loadBibleData() {
 let state = {
     bookIndex: 0,
     chapterIndex: 0,
-    selectedVerses: [],      // índices dos versículos selecionados
+    selectedVerses: [],
     lastSelectedVerse: null,
-    highlights: {},          // chave: "livro|cap|vers" -> cor
-    favorites: {},           // chave -> true
-    notes: {},               // chave -> texto
-    history: [],             // [{livro, capitulo, data}]
-    chaptersRead: new Set(), // "livro|cap"
-    lastPosition: null,      // {livro, capitulo, versiculo}
+    highlights: {},
+    favorites: {},
+    notes: {},
+    history: [],
+    chaptersRead: new Set(),
+    lastPosition: null,
     theme: 'dark',
     fontSize: 16,
     audioPlaying: false,
@@ -707,7 +690,6 @@ function loadState() {
     } catch (e) {}
 }
 
-// Aplica tema
 function applyTheme() {
     document.body.classList.toggle('light', state.theme === 'light');
     document.getElementById('theme-toggle').textContent = state.theme === 'light' ? '☀️' : '🌙';
@@ -717,9 +699,7 @@ function applyTheme() {
 // ====================================================================
 // NAVEGAÇÃO
 // ====================================================================
-function getBookNames() {
-    return bibleData.map(b => b.name);
-}
+function getBookNames() { return bibleData.map(b => b.name); }
 
 function getChapters(bookIndex) {
     if (!bibleData[bookIndex]) return [];
@@ -732,7 +712,6 @@ function getChapterVerses(bookIndex, chapterIndex) {
     return book.chapters[chapterIndex];
 }
 
-// Renderiza lista de livros na sidebar
 function renderBookList() {
     const container = document.getElementById('book-list');
     container.innerHTML = '';
@@ -747,19 +726,16 @@ function renderBookList() {
             state.chapterIndex = 0;
             state.selectedVerses = [];
             state.lastSelectedVerse = null;
-            // Salva a posição ao trocar de livro
             state.lastPosition = { livro: i, capitulo: 0, versiculo: 0 };
             renderBookList();
             renderChapterList();
             renderChapter();
             saveState();
-            // NÃO fecha a sidebar aqui — usuário ainda precisa escolher o capítulo
         });
         container.appendChild(btn);
     });
 }
 
-// Renderiza lista de capítulos na sidebar
 function renderChapterList() {
     const container = document.getElementById('chapter-list');
     container.innerHTML = '';
@@ -774,7 +750,6 @@ function renderChapterList() {
         const btn = document.createElement('button');
         btn.className = 'chapter-btn' + (ci === state.chapterIndex ? ' active' : '');
         btn.textContent = ci + 1;
-        // Marcar se lido
         if (state.chaptersRead.has(`${state.bookIndex}|${ci}`)) {
             btn.style.background = 'rgba(255,255,255,0.1)';
             btn.style.border = '1px solid var(--accent-gold)';
@@ -784,7 +759,6 @@ function renderChapterList() {
             state.chapterIndex = ci;
             state.selectedVerses = [];
             state.lastSelectedVerse = null;
-            // Salva a posição imediatamente ao trocar de capítulo
             state.lastPosition = { livro: state.bookIndex, capitulo: ci, versiculo: 0 };
             renderBookList();
             renderChapterList();
@@ -814,7 +788,6 @@ function renderChapter(preservarScroll) {
         return;
     }
 
-    // Título
     let html = `<div class="chapter-title">${book.name.toUpperCase()} — CAPÍTULO ${state.chapterIndex + 1}</div>`;
 
     verses.forEach((text, i) => {
@@ -837,13 +810,11 @@ function renderChapter(preservarScroll) {
 
     container.innerHTML = html;
 
-    // Eventos de clique nos versículos
     container.querySelectorAll('.verse').forEach(el => {
         el.addEventListener('click', (e) => {
             const idx = parseInt(el.dataset.verse);
             selectVerse(idx);
         });
-        // Menu de contexto (clique direito)
         el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             const idx = parseInt(el.dataset.verse);
@@ -852,10 +823,6 @@ function renderChapter(preservarScroll) {
         });
     });
 
-    // Marcar capítulo como lido se estiver no final (scroll)
-    // (já será feito pelo monitor de scroll)
-
-    // Restaurar posição de leitura (só quando NÃO é redesenho por marcação)
     if (!preservarScroll && state.lastPosition && state.lastPosition.livro === state.bookIndex && state.lastPosition.capitulo === state.chapterIndex) {
         const vers = state.lastPosition.versiculo;
         if (vers !== undefined) {
@@ -866,11 +833,9 @@ function renderChapter(preservarScroll) {
         }
     }
 
-    // Adicionar ao histórico
     addHistory(state.bookIndex, state.chapterIndex);
     saveState();
 
-    // Restaura scroll quando chamado por ação de marcação (highlight, fav, note)
     if (preservarScroll && scrollAntes > 0) {
         container.scrollTop = scrollAntes;
     }
@@ -884,7 +849,6 @@ function selectVerse(idx) {
     if (!el) return;
 
     if (state.selectedVerses.includes(idx)) {
-        // Desmarcar
         state.selectedVerses = state.selectedVerses.filter(v => v !== idx);
         el.classList.remove('selected');
         if (state.lastSelectedVerse === idx) state.lastSelectedVerse = null;
@@ -894,7 +858,6 @@ function selectVerse(idx) {
         el.classList.add('selected');
     }
 
-    // Esconder menu se não houver seleção
     if (state.selectedVerses.length === 0) {
         hideVerseMenu();
     } else {
@@ -919,7 +882,6 @@ function hideVerseMenu() {
     document.getElementById('verse-menu').classList.remove('open');
 }
 
-// Ações do menu
 document.querySelectorAll('#verse-menu .vm-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const action = btn.dataset.action;
@@ -967,9 +929,8 @@ document.querySelectorAll('#verse-menu .vm-btn').forEach(btn => {
 // FUNÇÕES DO MENU
 // ====================================================================
 function openHighlightPicker(key) {
-    // Captura todos os selecionados ANTES de qualquer limpeza
     const allKeys = state.selectedVerses.map(vi => `${state.bookIndex}|${state.chapterIndex}|${vi}`);
-    if (allKeys.length === 0) allKeys.push(key); // fallback: pelo menos o que foi passado
+    if (allKeys.length === 0) allKeys.push(key);
 
     const body = document.getElementById('modal-body');
     const colors = [
@@ -1013,7 +974,6 @@ function toggleFavorite(key) {
     const allKeys = state.selectedVerses.map(vi => `${state.bookIndex}|${state.chapterIndex}|${vi}`);
     if (allKeys.length === 0) allKeys.push(key);
 
-    // Se o primeiro já é favorito, remove todos; senão, adiciona todos
     const removing = !!state.favorites[allKeys[0]];
     allKeys.forEach(k => {
         if (removing) delete state.favorites[k];
@@ -1049,7 +1009,6 @@ function openNoteEditor(key) {
     `;
     openModal('📝 Anotação');
 
-    // Foca no campo de texto automaticamente
     setTimeout(() => document.getElementById('note-text').focus(), 100);
 
     document.getElementById('note-save').addEventListener('click', () => {
@@ -1083,7 +1042,6 @@ function _getSelectedText() {
         ? book.name.toUpperCase() + ' ' + (state.chapterIndex+1) + '.' + first
         : book.name.toUpperCase() + ' ' + (state.chapterIndex+1) + '.' + first + '-' + last;
     var text = lines.join('\n');
-    // Ponto final forçado
     text = text.replace(/[.,;:'"]+\s*$/, '') + '.';
     return { text: text, ref: ref, count: sorted.length };
 }
@@ -1127,7 +1085,6 @@ function listenVerse(idx) {
         toast('TTS não disponível neste navegador.');
         return;
     }
-    // Para qualquer fala anterior
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
@@ -1191,7 +1148,6 @@ function _setupMediaSession(playing) {
     } catch(e) {}
 }
 
-// ── WAKE LOCK (impede tela de apagar) ────────────────
 async function _requestWakeLock() {
     try { if ('wakeLock' in navigator) _wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
 }
@@ -1199,7 +1155,6 @@ function _releaseWakeLock() {
     try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
 }
 
-// ── KEEPALIVE: resume a cada 500ms (WebView pausa sozinho) ──
 function _startTtsKeepalive() {
     _stopTtsKeepalive();
     _ttsKeepaliveInterval = setInterval(() => {
@@ -1211,7 +1166,6 @@ function _stopTtsKeepalive() {
     if (_ttsKeepaliveInterval) { clearInterval(_ttsKeepaliveInterval); _ttsKeepaliveInterval = null; }
 }
 
-// ── KEEPALIVE ÁUDIO: AudioContext silencioso mantém sessão ativa ──
 function _startAudioKeepalive() {
     if (_ttsAudioCtx) return;
     try {
@@ -1230,7 +1184,6 @@ function _stopAudioKeepalive() {
     try { if (_ttsAudioCtx) { _ttsAudioCtx.close(); _ttsAudioCtx = null; } } catch(e) {}
 }
 
-// ── FALAR VERSO POR VERSO ────────────────────────────
 function _ttsSpeakNext() {
     if (!_ttsRunning || _ttsIdx >= _ttsQueue.length) {
         if (_ttsRunning) _ttsFinished();
@@ -1270,7 +1223,6 @@ function _ttsSpeakNext() {
     }, 300);
 }
 
-// ── LEITURA CONTÍNUA: avança capítulo quando termina ──
 function _ttsFinished() {
     if (_ttsRunning && _ttsContinuous) {
         const book = bibleData[state.bookIndex];
@@ -1330,7 +1282,6 @@ function _cleanup() {
     _ttsUtterance = null;
 }
 
-// ── INICIAR / PARAR ──────────────────────────────────
 async function playChapterAudio() {
     if (state.audioPlaying || _ttsRunning) { stopChapterAudio(); return; }
     if (!_hasWebSpeech()) { toast('TTS não disponível.'); return; }
@@ -1360,7 +1311,6 @@ function stopChapterAudio() {
     _setAudioUI(false);
 }
 
-// ── SEGUNDO PLANO: retomar ao voltar / manter vivo ───
 document.addEventListener('visibilitychange', async () => {
     if (!_ttsRunning) return;
     if (!document.hidden) {
@@ -1376,7 +1326,6 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
-// Keepalive global de segurança
 setInterval(() => {
     if (!_ttsRunning) return;
     try { if (_hasWebSpeech() && window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
@@ -1391,7 +1340,6 @@ function addHistory(bookIdx, chapterIdx) {
         capitulo: chapterIdx,
         data: new Date().toLocaleString('pt-BR')
     };
-    // Remove duplicata do mesmo capítulo
     state.history = state.history.filter(h => !(h.livro === bookIdx && h.capitulo === chapterIdx));
     state.history.unshift(entry);
     if (state.history.length > 50) state.history = state.history.slice(0, 50);
@@ -1526,11 +1474,9 @@ document.getElementById('font-dec').addEventListener('click', () => {
     saveState();
 });
 
-// ── ZOOM POR PINÇA NA FONTE (dois dedos na área de leitura) ────────────
 (function(){
     var el = document.getElementById('bible-text');
     var startDist = 0, startSize = 16, pinching = false;
-
     function dist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
     function aplicar(px){
         px = Math.round(Math.max(11, Math.min(28, px)));
@@ -1539,7 +1485,6 @@ document.getElementById('font-dec').addEventListener('click', () => {
             document.getElementById('bible-text').style.fontSize = px + 'px';
         }
     }
-
     el.addEventListener('touchstart', function(e){
         if(e.touches.length === 2){
             pinching = true;
@@ -1548,13 +1493,11 @@ document.getElementById('font-dec').addEventListener('click', () => {
             e.preventDefault();
         }
     }, {passive:false});
-
     el.addEventListener('touchmove', function(e){
         if(!pinching || e.touches.length !== 2) return;
         e.preventDefault();
         aplicar(startSize * dist(e.touches) / startDist);
     }, {passive:false});
-
     el.addEventListener('touchend', function(e){
         if(e.touches.length < 2 && pinching){
             pinching = false;
@@ -1690,7 +1633,6 @@ document.getElementById('bible-text').addEventListener('scroll', () => {
             };
             saveState();
         }
-        // Marcar capítulo como lido se rolou até o final
         if (container.scrollTop + container.clientHeight >= container.scrollHeight - 30) {
             state.chaptersRead.add(`${state.bookIndex}|${state.chapterIndex}`);
             renderChapterList();
@@ -1699,7 +1641,6 @@ document.getElementById('bible-text').addEventListener('scroll', () => {
     }, 500);
 });
 
-// Salva posição ao minimizar/fechar o app (backup caso o scroll não tenha disparado)
 function _salvarPosicaoAtual() {
     const container = document.getElementById('bible-text');
     if (!container) return;
@@ -1737,7 +1678,6 @@ async function init() {
         toast('⚠️ Usando dados de emergência.');
     }
 
-    // Se tiver última posição, vai para lá
     if (state.lastPosition) {
         const lp = state.lastPosition;
         if (lp.livro !== undefined) state.bookIndex = lp.livro;
@@ -1748,7 +1688,6 @@ async function init() {
     renderChapterList();
     renderChapter();
 
-    // Rola até o versículo exato onde parou
     if (state.lastPosition && state.lastPosition.versiculo !== undefined && state.lastPosition.versiculo > 0) {
         const vi = state.lastPosition.versiculo;
         setTimeout(() => {
@@ -1757,7 +1696,6 @@ async function init() {
         }, 120);
     }
 
-    // Fechar menu ao clicar fora
     document.addEventListener('click', (e) => {
         const menu = document.getElementById('verse-menu');
         if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('.verse')) {
@@ -1768,276 +1706,21 @@ async function init() {
     console.log('✅ Bíblia Digital Qq carregada!');
 }
 
-// Inicia quando o DOM estiver pronto
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
 
-// ====================================================================
-// GOOGLE DRIVE BACKUP — Login + Backup automático + Restauração
-// ====================================================================
-const GDRIVE_CLIENT_ID = '1000921811541-egqnpp1t5u01npm7npue0gio010lkhlf.apps.googleusercontent.com';
-const GDRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
-const GDRIVE_BACKUP_FILE = 'biblia_qq_backup.json';
-let _gdriveToken = null;
-let _gdriveEmail = null;
-let _gdriveBackupTimeout = null;
-let _gdriveFileId = null; // ID do arquivo de backup no Drive
-
-function _gdriveUpdateUI() {
-    const btn = document.getElementById('btn-conta');
-    if (!btn) return;
-    if (_gdriveToken && _gdriveEmail) {
-        const nome = _gdriveEmail.split('@')[0];
-        btn.style.color = '#4CAF50'; // verde
-        btn.title = 'Logado: ' + _gdriveEmail;
-        toast('☁️ Conectado: ' + nome);
-    } else {
-        btn.style.color = '';
-        btn.title = 'Entrar com Google';
-    }
-}
-
-function gdriveLogin() {
-    if (_gdriveToken) {
-        // Já logado — perguntar se quer sair
-        if (confirm('Logado como ' + _gdriveEmail + '.\n\nDeseja sair?')) {
-            const tokenParaRevogar = _gdriveToken;
-            _gdriveToken = null; _gdriveEmail = null; _gdriveFileId = null;
-            localStorage.removeItem('gdrive_email');
-            localStorage.removeItem('gdrive_token');
-            try { google.accounts.oauth2.revoke(tokenParaRevogar); } catch(e) {}
-            _gdriveUpdateUI();
-            toast('Conta desconectada');
-        }
-        return;
-    }
-    if (typeof google === 'undefined' || !google.accounts) {
-        toast('Serviço do Google não carregou.\nVerifique sua conexão.');
-        return;
-    }
-    const client = google.accounts.oauth2.initTokenClient({
-        client_id: GDRIVE_CLIENT_ID,
-        scope: GDRIVE_SCOPES,
-        callback: async (resp) => {
-            if (resp.error) {
-                toast('Erro no login: ' + (resp.error_description || resp.error));
-                return;
-            }
-            _gdriveToken = resp.access_token;
-            localStorage.setItem('gdrive_token', _gdriveToken);
-            // Pega o email do usuário
-            try {
-                const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { Authorization: 'Bearer ' + _gdriveToken }
-                });
-                const data = await info.json();
-                _gdriveEmail = data.email || 'Usuário';
-                localStorage.setItem('gdrive_email', _gdriveEmail);
-            } catch(e) {
-                _gdriveEmail = 'Usuário';
-            }
-            _gdriveUpdateUI();
-            // Restaurar backup ao fazer login
-            await gdriveRestore();
-            // Salvar backup imediatamente (mescla dados locais com o que veio do Drive)
-            gdriveScheduleBackup();
-        }
-    });
-    client.requestAccessToken();
-}
-
-// ── ENCONTRAR OU CRIAR O ARQUIVO DE BACKUP ────────────────
-async function _gdriveFindFile() {
-    if (_gdriveFileId) return _gdriveFileId;
-    try {
-        const resp = await fetch(
-            'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27' + GDRIVE_BACKUP_FILE + '%27&fields=files(id,name)',
-            { headers: { Authorization: 'Bearer ' + _gdriveToken } }
-        );
-        const data = await resp.json();
-        if (data.files && data.files.length > 0) {
-            _gdriveFileId = data.files[0].id;
-            return _gdriveFileId;
-        }
-    } catch(e) {}
-    return null;
-}
-
-async function _gdriveCreateFile(content) {
-    const metadata = { name: GDRIVE_BACKUP_FILE, parents: ['appDataFolder'] };
-    const boundary = '---biblia_qq_boundary---';
-    const body = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
-        + JSON.stringify(metadata) + '\r\n--' + boundary + '\r\nContent-Type: application/json\r\n\r\n'
-        + content + '\r\n--' + boundary + '--';
-    try {
-        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: {
-                Authorization: 'Bearer ' + _gdriveToken,
-                'Content-Type': 'multipart/related; boundary=' + boundary
-            },
-            body: body
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then(reg => {
+            console.log('✅ Service Worker registrado com sucesso!', reg.scope);
+        }).catch(err => {
+            console.error('⚠️ Falha ao registrar o Service Worker', err);
         });
-        const data = await resp.json();
-        _gdriveFileId = data.id;
-        return _gdriveFileId;
-    } catch(e) { return null; }
-}
-
-async function _gdriveUpdateFile(content) {
-    const fileId = await _gdriveFindFile();
-    if (!fileId) return _gdriveCreateFile(content);
-    try {
-        await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
-            method: 'PATCH',
-            headers: {
-                Authorization: 'Bearer ' + _gdriveToken,
-                'Content-Type': 'application/json'
-            },
-            body: content
-        });
-        return fileId;
-    } catch(e) { return null; }
-}
-
-// ── BACKUP: salvar no Drive ────────────────────────────────
-function gdriveScheduleBackup() {
-    if (!_gdriveToken) return;
-    clearTimeout(_gdriveBackupTimeout);
-    _gdriveBackupTimeout = setTimeout(async () => {
-        try {
-            const backupData = {
-                highlights: state.highlights,
-                favorites: state.favorites,
-                notes: state.notes,
-                history: state.history,
-                chaptersRead: Array.from(state.chaptersRead),
-                lastPosition: state.lastPosition,
-                bookIndex: state.bookIndex,
-                chapterIndex: state.chapterIndex,
-                theme: state.theme,
-                fontSize: state.fontSize,
-                backupDate: new Date().toISOString(),
-                appVersion: 'Biblia Digital QQ'
-            };
-            const json = JSON.stringify(backupData);
-            await _gdriveUpdateFile(json);
-            console.log('☁️ Backup salvo no Drive');
-        } catch(e) {
-            console.log('Erro no backup:', e);
-        }
-    }, 3000); // Espera 3s de inatividade antes de enviar (evita muitas chamadas)
-}
-
-// ── RESTAURAR: ler do Drive ────────────────────────────────
-async function gdriveRestore() {
-    if (!_gdriveToken) return;
-    try {
-        const fileId = await _gdriveFindFile();
-        if (!fileId) {
-            console.log('☁️ Nenhum backup encontrado — primeiro uso');
-            return;
-        }
-        const resp = await fetch(
-            'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
-            { headers: { Authorization: 'Bearer ' + _gdriveToken } }
-        );
-        if (!resp.ok) return;
-        const backup = await resp.json();
-
-        // Mescla: dados do Drive têm prioridade, mas dados locais que não existem no Drive são preservados
-        let mudou = false;
-        if (backup.highlights && Object.keys(backup.highlights).length > 0) {
-            Object.assign(state.highlights, backup.highlights);
-            mudou = true;
-        }
-        if (backup.favorites && Object.keys(backup.favorites).length > 0) {
-            Object.assign(state.favorites, backup.favorites);
-            mudou = true;
-        }
-        if (backup.notes && Object.keys(backup.notes).length > 0) {
-            Object.assign(state.notes, backup.notes);
-            mudou = true;
-        }
-        if (backup.history && backup.history.length > 0) {
-            // Une os dois históricos, sem duplicata (por livro+cap)
-            const hist = [...backup.history];
-            state.history.forEach(h => {
-                if (!hist.find(x => x.livro === h.livro && x.capitulo === h.capitulo)) hist.push(h);
-            });
-            state.history = hist.slice(0, 50);
-            mudou = true;
-        }
-        if (backup.chaptersRead) {
-            backup.chaptersRead.forEach(c => state.chaptersRead.add(c));
-            mudou = true;
-        }
-        if (backup.lastPosition) {
-            state.lastPosition = backup.lastPosition;
-            if (backup.bookIndex !== undefined) state.bookIndex = backup.bookIndex;
-            if (backup.chapterIndex !== undefined) state.chapterIndex = backup.chapterIndex;
-            mudou = true;
-        }
-        if (backup.theme) state.theme = backup.theme;
-        if (backup.fontSize) state.fontSize = backup.fontSize;
-
-        if (mudou) {
-            saveState();
-            renderBookList(); renderChapterList(); renderChapter();
-            if (state.theme === 'light') {
-                document.body.classList.add('light');
-                document.getElementById('theme-toggle').textContent = '☀️';
-            }
-            document.getElementById('bible-text').style.fontSize = state.fontSize + 'px';
-            toast('☁️ Dados restaurados do backup!');
-            console.log('☁️ Backup restaurado do Drive (data: ' + (backup.backupDate || '?') + ')');
-        }
-    } catch(e) {
-        console.log('Erro ao restaurar:', e);
-    }
-}
-
-// ── HOOKS: backup automático ao mudar dados ────────────────
-// Sobrescreve saveState pra disparar backup no Drive automaticamente
-const _originalSaveState = saveState;
-saveState = function() {
-    _originalSaveState();
-    gdriveScheduleBackup();
-};
-
-// ── BOTÃO DE CONTA ──────────────────────────────────────────
-document.getElementById('btn-conta').addEventListener('click', gdriveLogin);
-
-// ── AUTO-RECONNECT: usa o token salvo (sem popup) ──────────
-(function _autoReconnect() {
-    const savedToken = localStorage.getItem('gdrive_token');
-    const savedEmail = localStorage.getItem('gdrive_email');
-    if (!savedToken || !savedEmail) return;
-
-    // Testa se o token ainda é válido com uma chamada leve
-    fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: 'Bearer ' + savedToken }
-    }).then(r => {
-        if (r.ok) {
-            _gdriveToken = savedToken;
-            _gdriveEmail = savedEmail;
-            const btn = document.getElementById('btn-conta');
-            if (btn) { btn.style.color = '#4CAF50'; btn.title = 'Logado: ' + _gdriveEmail; }
-            console.log('☁️ Reconectado automaticamente: ' + savedEmail);
-            // Restaura backup silenciosamente
-            gdriveRestore();
-        } else {
-            // Token expirou — limpa, usuário clica quando quiser
-            localStorage.removeItem('gdrive_token');
-            console.log('☁️ Token expirado — toque em 👤 para reconectar');
-        }
-    }).catch(() => {
-        console.log('☁️ Sem internet — backup offline mantido');
     });
-})();
+}
 </script>
 </body>
 </html>
