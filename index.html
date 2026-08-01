@@ -37,12 +37,18 @@
             --bg-secondary: #f5f5f5;
             --bg-card: #f0f0f0;
             --bg-panel: #e0e0e0;
+            /* A cor de destaque precisa INVERTER no tema claro: no escuro ela é
+               branca, e se continuasse branca aqui sumiria no fundo claro
+               (título do topo, título do capítulo, número dos versículos, etc). */
             --accent-gold: #111111;
             --accent-warm: #333333;
             --accent-red: #b0b0b0;
             --text-primary: #111111;
             --text-secondary: #444444;
+            /* #777777 (herdado do tema escuro) dava só 4.11:1 sobre o fundo claro —
+               abaixo do mínimo legível. Este tom passa em todos os fundos claros. */
             --text-muted: #636363;
+            /* Texto que fica SOBRE a cor de destaque — agora escura, então branco */
             --text-on-gold: #ffffff;
             --border: #cccccc;
         }
@@ -134,6 +140,9 @@
             width: 0;
             border-right: none;
         }
+        /* A seção precisa ser um container flex que PODE encolher (flex:1 1 0 +
+           min-height:0). Sem isso, ela cresce com o conteúdo e o .sidebar-scroll
+           de dentro nunca chega a rolar — só é cortado pelo overflow do #sidebar. */
         .sidebar-section {
             padding: 8px 12px;
             flex: 1 1 0;
@@ -282,6 +291,9 @@
         #bible-text {
             flex: 1;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-x: none;
+            touch-action: pan-y;
             padding: 8px 4px;
             font-size: 16px;
             line-height: 1.8;
@@ -611,7 +623,11 @@
 // ====================================================================
 let bibleData = [];
 
+// Função para carregar dados do arquivo JS (via fetch)
 async function loadBibleData() {
+    // O Biblia_data.js é carregado via <script defer> no <head>. Como "defer"
+    // roda antes deste script inline, os dados já devem estar prontos aqui —
+    // mas esperamos um pouco (com tentativas) por segurança em conexões lentas.
     for (let tentativa = 0; tentativa < 40; tentativa++) {
         if (typeof bibleDataExterno !== 'undefined' && Array.isArray(bibleDataExterno)) {
             bibleData = bibleDataExterno;
@@ -623,6 +639,7 @@ async function loadBibleData() {
         }
         await new Promise(r => setTimeout(r, 50));
     }
+    // Fallback: dados de emergência
     bibleData = [
         { name: "Gênesis", chapters: [["No princípio, criou Deus os céus e a terra.", "E a terra era sem forma e vazia."]] },
         { name: "João", chapters: [["Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito."]] }
@@ -636,14 +653,14 @@ async function loadBibleData() {
 let state = {
     bookIndex: 0,
     chapterIndex: 0,
-    selectedVerses: [],
+    selectedVerses: [],      // índices dos versículos selecionados
     lastSelectedVerse: null,
-    highlights: {},
-    favorites: {},
-    notes: {},
-    history: [],
-    chaptersRead: new Set(),
-    lastPosition: null,
+    highlights: {},          // chave: "livro|cap|vers" -> cor
+    favorites: {},           // chave -> true
+    notes: {},               // chave -> texto
+    history: [],             // [{livro, capitulo, data}]
+    chaptersRead: new Set(), // "livro|cap"
+    lastPosition: null,      // {livro, capitulo, versiculo}
     theme: 'dark',
     fontSize: 16,
     audioPlaying: false,
@@ -690,6 +707,7 @@ function loadState() {
     } catch (e) {}
 }
 
+// Aplica tema
 function applyTheme() {
     document.body.classList.toggle('light', state.theme === 'light');
     document.getElementById('theme-toggle').textContent = state.theme === 'light' ? '☀️' : '🌙';
@@ -699,7 +717,9 @@ function applyTheme() {
 // ====================================================================
 // NAVEGAÇÃO
 // ====================================================================
-function getBookNames() { return bibleData.map(b => b.name); }
+function getBookNames() {
+    return bibleData.map(b => b.name);
+}
 
 function getChapters(bookIndex) {
     if (!bibleData[bookIndex]) return [];
@@ -712,6 +732,7 @@ function getChapterVerses(bookIndex, chapterIndex) {
     return book.chapters[chapterIndex];
 }
 
+// Renderiza lista de livros na sidebar
 function renderBookList() {
     const container = document.getElementById('book-list');
     container.innerHTML = '';
@@ -726,16 +747,19 @@ function renderBookList() {
             state.chapterIndex = 0;
             state.selectedVerses = [];
             state.lastSelectedVerse = null;
+            // Salva a posição ao trocar de livro
             state.lastPosition = { livro: i, capitulo: 0, versiculo: 0 };
             renderBookList();
             renderChapterList();
             renderChapter();
             saveState();
+            // NÃO fecha a sidebar aqui — usuário ainda precisa escolher o capítulo
         });
         container.appendChild(btn);
     });
 }
 
+// Renderiza lista de capítulos na sidebar
 function renderChapterList() {
     const container = document.getElementById('chapter-list');
     container.innerHTML = '';
@@ -750,6 +774,7 @@ function renderChapterList() {
         const btn = document.createElement('button');
         btn.className = 'chapter-btn' + (ci === state.chapterIndex ? ' active' : '');
         btn.textContent = ci + 1;
+        // Marcar se lido
         if (state.chaptersRead.has(`${state.bookIndex}|${ci}`)) {
             btn.style.background = 'rgba(255,255,255,0.1)';
             btn.style.border = '1px solid var(--accent-gold)';
@@ -759,6 +784,7 @@ function renderChapterList() {
             state.chapterIndex = ci;
             state.selectedVerses = [];
             state.lastSelectedVerse = null;
+            // Salva a posição imediatamente ao trocar de capítulo
             state.lastPosition = { livro: state.bookIndex, capitulo: ci, versiculo: 0 };
             renderBookList();
             renderChapterList();
@@ -788,6 +814,7 @@ function renderChapter(preservarScroll) {
         return;
     }
 
+    // Título
     let html = `<div class="chapter-title">${book.name.toUpperCase()} — CAPÍTULO ${state.chapterIndex + 1}</div>`;
 
     verses.forEach((text, i) => {
@@ -810,11 +837,13 @@ function renderChapter(preservarScroll) {
 
     container.innerHTML = html;
 
+    // Eventos de clique nos versículos
     container.querySelectorAll('.verse').forEach(el => {
         el.addEventListener('click', (e) => {
             const idx = parseInt(el.dataset.verse);
             selectVerse(idx);
         });
+        // Menu de contexto (clique direito)
         el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             const idx = parseInt(el.dataset.verse);
@@ -823,6 +852,10 @@ function renderChapter(preservarScroll) {
         });
     });
 
+    // Marcar capítulo como lido se estiver no final (scroll)
+    // (já será feito pelo monitor de scroll)
+
+    // Restaurar posição de leitura (só quando NÃO é redesenho por marcação)
     if (!preservarScroll && state.lastPosition && state.lastPosition.livro === state.bookIndex && state.lastPosition.capitulo === state.chapterIndex) {
         const vers = state.lastPosition.versiculo;
         if (vers !== undefined) {
@@ -833,9 +866,11 @@ function renderChapter(preservarScroll) {
         }
     }
 
+    // Adicionar ao histórico
     addHistory(state.bookIndex, state.chapterIndex);
     saveState();
 
+    // Restaura scroll quando chamado por ação de marcação (highlight, fav, note)
     if (preservarScroll && scrollAntes > 0) {
         container.scrollTop = scrollAntes;
     }
@@ -849,6 +884,7 @@ function selectVerse(idx) {
     if (!el) return;
 
     if (state.selectedVerses.includes(idx)) {
+        // Desmarcar
         state.selectedVerses = state.selectedVerses.filter(v => v !== idx);
         el.classList.remove('selected');
         if (state.lastSelectedVerse === idx) state.lastSelectedVerse = null;
@@ -858,6 +894,7 @@ function selectVerse(idx) {
         el.classList.add('selected');
     }
 
+    // Esconder menu se não houver seleção
     if (state.selectedVerses.length === 0) {
         hideVerseMenu();
     } else {
@@ -882,6 +919,7 @@ function hideVerseMenu() {
     document.getElementById('verse-menu').classList.remove('open');
 }
 
+// Ações do menu
 document.querySelectorAll('#verse-menu .vm-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const action = btn.dataset.action;
@@ -929,8 +967,9 @@ document.querySelectorAll('#verse-menu .vm-btn').forEach(btn => {
 // FUNÇÕES DO MENU
 // ====================================================================
 function openHighlightPicker(key) {
+    // Captura todos os selecionados ANTES de qualquer limpeza
     const allKeys = state.selectedVerses.map(vi => `${state.bookIndex}|${state.chapterIndex}|${vi}`);
-    if (allKeys.length === 0) allKeys.push(key);
+    if (allKeys.length === 0) allKeys.push(key); // fallback: pelo menos o que foi passado
 
     const body = document.getElementById('modal-body');
     const colors = [
@@ -974,6 +1013,7 @@ function toggleFavorite(key) {
     const allKeys = state.selectedVerses.map(vi => `${state.bookIndex}|${state.chapterIndex}|${vi}`);
     if (allKeys.length === 0) allKeys.push(key);
 
+    // Se o primeiro já é favorito, remove todos; senão, adiciona todos
     const removing = !!state.favorites[allKeys[0]];
     allKeys.forEach(k => {
         if (removing) delete state.favorites[k];
@@ -1009,6 +1049,7 @@ function openNoteEditor(key) {
     `;
     openModal('📝 Anotação');
 
+    // Foca no campo de texto automaticamente
     setTimeout(() => document.getElementById('note-text').focus(), 100);
 
     document.getElementById('note-save').addEventListener('click', () => {
@@ -1042,6 +1083,7 @@ function _getSelectedText() {
         ? book.name.toUpperCase() + ' ' + (state.chapterIndex+1) + '.' + first
         : book.name.toUpperCase() + ' ' + (state.chapterIndex+1) + '.' + first + '-' + last;
     var text = lines.join('\n');
+    // Ponto final forçado
     text = text.replace(/[.,;:'"]+\s*$/, '') + '.';
     return { text: text, ref: ref, count: sorted.length };
 }
@@ -1085,6 +1127,7 @@ function listenVerse(idx) {
         toast('TTS não disponível neste navegador.');
         return;
     }
+    // Para qualquer fala anterior
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
@@ -1148,6 +1191,7 @@ function _setupMediaSession(playing) {
     } catch(e) {}
 }
 
+// ── WAKE LOCK (impede tela de apagar) ────────────────
 async function _requestWakeLock() {
     try { if ('wakeLock' in navigator) _wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
 }
@@ -1155,6 +1199,7 @@ function _releaseWakeLock() {
     try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
 }
 
+// ── KEEPALIVE: resume a cada 500ms (WebView pausa sozinho) ──
 function _startTtsKeepalive() {
     _stopTtsKeepalive();
     _ttsKeepaliveInterval = setInterval(() => {
@@ -1166,6 +1211,7 @@ function _stopTtsKeepalive() {
     if (_ttsKeepaliveInterval) { clearInterval(_ttsKeepaliveInterval); _ttsKeepaliveInterval = null; }
 }
 
+// ── KEEPALIVE ÁUDIO: AudioContext silencioso mantém sessão ativa ──
 function _startAudioKeepalive() {
     if (_ttsAudioCtx) return;
     try {
@@ -1184,6 +1230,7 @@ function _stopAudioKeepalive() {
     try { if (_ttsAudioCtx) { _ttsAudioCtx.close(); _ttsAudioCtx = null; } } catch(e) {}
 }
 
+// ── FALAR VERSO POR VERSO ────────────────────────────
 function _ttsSpeakNext() {
     if (!_ttsRunning || _ttsIdx >= _ttsQueue.length) {
         if (_ttsRunning) _ttsFinished();
@@ -1223,6 +1270,7 @@ function _ttsSpeakNext() {
     }, 300);
 }
 
+// ── LEITURA CONTÍNUA: avança capítulo quando termina ──
 function _ttsFinished() {
     if (_ttsRunning && _ttsContinuous) {
         const book = bibleData[state.bookIndex];
@@ -1282,6 +1330,7 @@ function _cleanup() {
     _ttsUtterance = null;
 }
 
+// ── INICIAR / PARAR ──────────────────────────────────
 async function playChapterAudio() {
     if (state.audioPlaying || _ttsRunning) { stopChapterAudio(); return; }
     if (!_hasWebSpeech()) { toast('TTS não disponível.'); return; }
@@ -1311,6 +1360,7 @@ function stopChapterAudio() {
     _setAudioUI(false);
 }
 
+// ── SEGUNDO PLANO: retomar ao voltar / manter vivo ───
 document.addEventListener('visibilitychange', async () => {
     if (!_ttsRunning) return;
     if (!document.hidden) {
@@ -1326,6 +1376,7 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
+// Keepalive global de segurança
 setInterval(() => {
     if (!_ttsRunning) return;
     try { if (_hasWebSpeech() && window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
@@ -1340,6 +1391,7 @@ function addHistory(bookIdx, chapterIdx) {
         capitulo: chapterIdx,
         data: new Date().toLocaleString('pt-BR')
     };
+    // Remove duplicata do mesmo capítulo
     state.history = state.history.filter(h => !(h.livro === bookIdx && h.capitulo === chapterIdx));
     state.history.unshift(entry);
     if (state.history.length > 50) state.history = state.history.slice(0, 50);
@@ -1474,9 +1526,11 @@ document.getElementById('font-dec').addEventListener('click', () => {
     saveState();
 });
 
+// ── ZOOM POR PINÇA NA FONTE (dois dedos na área de leitura) ────────────
 (function(){
     var el = document.getElementById('bible-text');
     var startDist = 0, startSize = 16, pinching = false;
+
     function dist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
     function aplicar(px){
         px = Math.round(Math.max(11, Math.min(28, px)));
@@ -1485,6 +1539,7 @@ document.getElementById('font-dec').addEventListener('click', () => {
             document.getElementById('bible-text').style.fontSize = px + 'px';
         }
     }
+
     el.addEventListener('touchstart', function(e){
         if(e.touches.length === 2){
             pinching = true;
@@ -1493,11 +1548,13 @@ document.getElementById('font-dec').addEventListener('click', () => {
             e.preventDefault();
         }
     }, {passive:false});
+
     el.addEventListener('touchmove', function(e){
         if(!pinching || e.touches.length !== 2) return;
         e.preventDefault();
         aplicar(startSize * dist(e.touches) / startDist);
     }, {passive:false});
+
     el.addEventListener('touchend', function(e){
         if(e.touches.length < 2 && pinching){
             pinching = false;
@@ -1505,6 +1562,113 @@ document.getElementById('font-dec').addEventListener('click', () => {
         }
     }, {passive:true});
 })();
+
+// ============================================================
+// NAVEGAÇÃO POR GESTOS (swipe) + HISTÓRICO DO ANDROID
+// Swipe esquerda → próximo capítulo
+// Swipe direita → capítulo anterior
+// Cada navegação empilha no history.pushState, pra o botão
+// voltar do Android desfazer na mesma ordem.
+// ============================================================
+(function(){
+    var el = document.getElementById('bible-text');
+    var inicioX = 0, inicioY = 0, inicioTempo = 0, comDoisDedos = false, bloqueandoGestoNativo = false;
+
+    var DISTANCIA_MINIMA = 70;
+    var TEMPO_MAXIMO = 900;
+    var PROPORCAO_MINIMA = 1.8;
+    var LIMIAR_INTENCAO = 12;
+
+    el.addEventListener('touchstart', function(e){
+        if(e.touches.length === 1){
+            inicioX = e.touches[0].clientX;
+            inicioY = e.touches[0].clientY;
+            inicioTempo = Date.now();
+            comDoisDedos = false;
+            bloqueandoGestoNativo = false;
+        } else {
+            comDoisDedos = true;
+        }
+    }, {passive:true});
+
+    el.addEventListener('touchmove', function(e){
+        if(comDoisDedos || e.touches.length !== 1) return;
+        var dx = e.touches[0].clientX - inicioX;
+        var dy = e.touches[0].clientY - inicioY;
+        if(!bloqueandoGestoNativo && Math.abs(dx) > LIMIAR_INTENCAO && Math.abs(dx) > Math.abs(dy)){
+            bloqueandoGestoNativo = true;
+        }
+        if(bloqueandoGestoNativo && e.cancelable){
+            e.preventDefault();
+        }
+    }, {passive:false});
+
+    el.addEventListener('touchend', function(e){
+        if(comDoisDedos || e.touches.length !== 0 || e.changedTouches.length !== 1) return;
+        var dx = e.changedTouches[0].clientX - inicioX;
+        var dy = e.changedTouches[0].clientY - inicioY;
+        var dt = Date.now() - inicioTempo;
+        if(dt > TEMPO_MAXIMO) return;
+        if(Math.abs(dx) < DISTANCIA_MINIMA) return;
+        if(Math.abs(dx) < Math.abs(dy) * PROPORCAO_MINIMA) return;
+
+        if(dx < 0) _navegarCapitulo(1);   // swipe esquerda → próximo
+        else _navegarCapitulo(-1);         // swipe direita → anterior
+    }, {passive:true});
+})();
+
+function _navegarCapitulo(dir) {
+    var book = bibleData[state.bookIndex];
+    if (!book) return;
+    var totalCaps = book.chapters.length;
+
+    if (dir > 0) {
+        // Próximo capítulo (ou próximo livro)
+        if (state.chapterIndex < totalCaps - 1) {
+            state.chapterIndex++;
+        } else if (state.bookIndex < bibleData.length - 1) {
+            state.bookIndex++;
+            state.chapterIndex = 0;
+        } else {
+            return; // fim da Bíblia
+        }
+    } else {
+        // Capítulo anterior (ou livro anterior)
+        if (state.chapterIndex > 0) {
+            state.chapterIndex--;
+        } else if (state.bookIndex > 0) {
+            state.bookIndex--;
+            state.chapterIndex = bibleData[state.bookIndex].chapters.length - 1;
+        } else {
+            return; // início da Bíblia
+        }
+    }
+
+    state.lastPosition = { livro: state.bookIndex, capitulo: state.chapterIndex, versiculo: 0 };
+    renderBookList(); renderChapterList(); renderChapter(); saveState();
+
+    // Empilha no histórico do navegador (botão voltar do Android)
+    try {
+        history.pushState({ bi: state.bookIndex, ci: state.chapterIndex }, '',
+            location.pathname + location.search);
+    } catch(e) {}
+}
+
+// ── BOTÃO VOLTAR DO ANDROID: volta pro capítulo anterior na pilha ──
+window.addEventListener('popstate', function(e) {
+    if (e.state && e.state.bi !== undefined) {
+        state.bookIndex = e.state.bi;
+        state.chapterIndex = e.state.ci;
+        state.lastPosition = { livro: state.bookIndex, capitulo: state.chapterIndex, versiculo: 0 };
+        renderBookList(); renderChapterList(); renderChapter(); saveState();
+    }
+});
+
+// Estado inicial na pilha (pra o primeiro popstate ter pra onde voltar)
+try {
+    history.replaceState({ bi: state.bookIndex, ci: state.chapterIndex }, '',
+        location.pathname + location.search);
+} catch(e) {}
 document.getElementById('search-close').addEventListener('click', fecharBusca);
 document.getElementById('search-overlay').addEventListener('click', (e) => {
     if (e.target === document.getElementById('search-overlay')) fecharBusca();
@@ -1633,6 +1797,7 @@ document.getElementById('bible-text').addEventListener('scroll', () => {
             };
             saveState();
         }
+        // Marcar capítulo como lido se rolou até o final
         if (container.scrollTop + container.clientHeight >= container.scrollHeight - 30) {
             state.chaptersRead.add(`${state.bookIndex}|${state.chapterIndex}`);
             renderChapterList();
@@ -1641,6 +1806,7 @@ document.getElementById('bible-text').addEventListener('scroll', () => {
     }, 500);
 });
 
+// Salva posição ao minimizar/fechar o app (backup caso o scroll não tenha disparado)
 function _salvarPosicaoAtual() {
     const container = document.getElementById('bible-text');
     if (!container) return;
@@ -1678,6 +1844,7 @@ async function init() {
         toast('⚠️ Usando dados de emergência.');
     }
 
+    // Se tiver última posição, vai para lá
     if (state.lastPosition) {
         const lp = state.lastPosition;
         if (lp.livro !== undefined) state.bookIndex = lp.livro;
@@ -1688,6 +1855,7 @@ async function init() {
     renderChapterList();
     renderChapter();
 
+    // Rola até o versículo exato onde parou
     if (state.lastPosition && state.lastPosition.versiculo !== undefined && state.lastPosition.versiculo > 0) {
         const vi = state.lastPosition.versiculo;
         setTimeout(() => {
@@ -1696,6 +1864,7 @@ async function init() {
         }, 120);
     }
 
+    // Fechar menu ao clicar fora
     document.addEventListener('click', (e) => {
         const menu = document.getElementById('verse-menu');
         if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('.verse')) {
@@ -1706,21 +1875,13 @@ async function init() {
     console.log('✅ Bíblia Digital Qq carregada!');
 }
 
+// Inicia quando o DOM estiver pronto
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
 
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then(reg => {
-            console.log('✅ Service Worker registrado com sucesso!', reg.scope);
-        }).catch(err => {
-            console.error('⚠️ Falha ao registrar o Service Worker', err);
-        });
-    });
-}
 </script>
 </body>
 </html>
