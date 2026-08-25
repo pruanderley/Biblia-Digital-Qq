@@ -1894,6 +1894,24 @@ async function init() {
     });
 
     console.log('✅ Bíblia Digital Qq carregada!');
+
+    // Inicializa o seletor de versões (se disponível)
+    if (typeof BibleVersionsSimple !== 'undefined') {
+        BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH', 'NVI'], 'JFA').then(() => {
+            // Move o botão pro topbar
+            const vc = document.getElementById('bible-version-container');
+            const tgt = document.getElementById('version-btn-container');
+            if (vc && tgt) tgt.appendChild(vc);
+        });
+
+        // Quando a versão muda, atualiza o bibleData LOCAL e re-renderiza
+        window.addEventListener('bible-version-changed', (e) => {
+            bibleData = window.bibleDataExterno;
+            renderBookList();
+            renderChapterList();
+            renderChapter(true);
+        });
+    }
 }
 
 // Inicia quando o DOM estiver pronto
@@ -1903,30 +1921,6 @@ if (document.readyState === 'loading') {
     init();
 }
 
-</script>
-
-<!-- Inicialização do Seletor de Versões -->
-<script>
-document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof BibleVersionsSimple === 'undefined') return;
-
-    await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH', 'NVI'], 'JFA');
-
-    // Move o botão de versões pro topbar do QQ
-    const versionContainer = document.getElementById('bible-version-container');
-    const target = document.getElementById('version-btn-container');
-    if (versionContainer && target) {
-        target.appendChild(versionContainer);
-    }
-
-    // Quando a versão muda, atualiza o bibleData local e re-renderiza
-    window.addEventListener('bible-version-changed', (e) => {
-        bibleData = window.bibleDataExterno;
-        renderBookList();
-        renderChapterList();
-        renderChapter(true);
-    });
-});
 </script>
 </body>
 </html>
