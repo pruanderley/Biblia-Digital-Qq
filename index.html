@@ -10,6 +10,7 @@
     <!-- Coloque o Biblia_data.js na mesma pasta deste HTML -->
     <script src="Biblia_data.js" defer></script>
     <script src="biblia_data.js" defer></script>
+    <script src="bible-versions-FINAL-v2.js" defer></script>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
     <style>
@@ -98,6 +99,27 @@
             display: flex;
             gap: 6px;
             align-items: center;
+        }
+        /* Ajuste do botão de versões dentro do topbar */
+        #version-btn-container .bible-version-container {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+        #version-btn-container .bible-version-btn {
+            width: auto !important;
+            min-width: 38px !important;
+            height: 36px !important;
+            padding: 4px 12px !important;
+            font-size: 12px !important;
+            border-radius: 50% !important;
+            background: var(--bg-card) !important;
+            border: 1px solid var(--border) !important;
+            color: var(--text-primary) !important;
+        }
+        #version-btn-container .bible-version-btn:hover {
+            background: var(--bg-secondary) !important;
+            border-color: var(--accent-gold) !important;
+            color: var(--accent-gold) !important;
         }
         .top-btn {
             background: var(--bg-card);
@@ -534,14 +556,13 @@
 <div id="app">
     <!-- Topbar -->
     <header id="topbar">
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
             <button id="menu-toggle" class="top-btn" aria-label="Menu">☰</button>
             <h1 id="app-title">Bíblia Digital Qq</h1>
-        </div>
-        <div id="topbar-controls">
-            <button id="theme-toggle" class="top-btn" aria-label="Tema">🌙</button>
             <button id="audio-btn-top" class="top-btn" aria-label="Ouvir capítulo">🔊</button>
+            <button id="theme-toggle" class="top-btn" aria-label="Tema">🌙</button>
         </div>
+        <div id="version-btn-container"></div>
     </header>
 
     <!-- Sidebar backdrop (mobile) -->
@@ -1882,6 +1903,30 @@ if (document.readyState === 'loading') {
     init();
 }
 
+</script>
+
+<!-- Inicialização do Seletor de Versões -->
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    if (typeof BibleVersionsSimple === 'undefined') return;
+
+    await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH', 'NVI'], 'JFA');
+
+    // Move o botão de versões pro topbar do QQ
+    const versionContainer = document.getElementById('bible-version-container');
+    const target = document.getElementById('version-btn-container');
+    if (versionContainer && target) {
+        target.appendChild(versionContainer);
+    }
+
+    // Quando a versão muda, atualiza o bibleData local e re-renderiza
+    window.addEventListener('bible-version-changed', (e) => {
+        bibleData = window.bibleDataExterno;
+        renderBookList();
+        renderChapterList();
+        renderChapter(true);
+    });
+});
 </script>
 </body>
 </html>

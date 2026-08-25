@@ -1,0 +1,12 @@
+{
+  "appId": "biblia.digital.qq",
+  "appName": "Bíblia Digital QQ",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": false
+  }
+}
