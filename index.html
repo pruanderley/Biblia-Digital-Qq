@@ -7,9 +7,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Bíblia Digital QQ</title>
-    <!-- Coloque o Biblia_data.js na mesma pasta deste HTML -->
-    <script src="Biblia_data.js" defer></script>
-    <script src="biblia_data.js" defer></script>
+    <!-- Dados da Bíblia — carregam em paralelo enquanto a página renderiza -->
+    <script src="Biblia_data_JFA.js" defer></script>
+    <script src="Biblia_data_KJF.js" defer></script>
+    <script src="Biblia_data_NTLH.js" defer></script>
+    <script src="Biblia_data_NVI.js" defer></script>
     <script src="bible-versions-FINAL-v2.js" defer></script>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -646,19 +648,29 @@ let bibleData = [];
 
 // Função para carregar dados do arquivo JS (via fetch)
 async function loadBibleData() {
-    // O Biblia_data.js é carregado via <script defer> no <head>. Como "defer"
-    // roda antes deste script inline, os dados já devem estar prontos aqui —
-    // mas esperamos um pouco (com tentativas) por segurança em conexões lentas.
-    for (let tentativa = 0; tentativa < 40; tentativa++) {
-        if (typeof bibleDataExterno !== 'undefined' && Array.isArray(bibleDataExterno)) {
-            bibleData = bibleDataExterno;
-            return true;
+    // Tenta pegar dados já carregados (script defer roda antes deste inline)
+    if (typeof bibleDataExterno !== 'undefined' && Array.isArray(bibleDataExterno)) {
+        bibleData = bibleDataExterno; return true;
+    }
+    // Procura as versões nomeadas (carregadas em paralelo pelo head)
+    for (const v of ['JFA','KJF','NTLH','NVI']) {
+        const d = window['bibleData_' + v];
+        if (d && Array.isArray(d) && d.length > 0) {
+            bibleData = d; window.bibleDataExterno = d; return true;
         }
-        if (typeof BibleData !== 'undefined' && Array.isArray(BibleData)) {
-            bibleData = BibleData;
-            return true;
-        }
+    }
+    // Espera breve caso ainda não tenha terminado de carregar
+    for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 50));
+        if (typeof bibleDataExterno !== 'undefined' && Array.isArray(bibleDataExterno)) {
+            bibleData = bibleDataExterno; return true;
+        }
+        for (const v of ['JFA','KJF','NTLH','NVI']) {
+            const d = window['bibleData_' + v];
+            if (d && Array.isArray(d) && d.length > 0) {
+                bibleData = d; window.bibleDataExterno = d; return true;
+            }
+        }
     }
     // Fallback: dados de emergência
     bibleData = [
@@ -1101,11 +1113,9 @@ function _getSelectedText() {
     const first = sorted[0] + 1;
     const last = sorted[sorted.length - 1] + 1;
     const ref = first === last
-        ? book.name.toUpperCase() + ' ' + (state.chapterIndex+1) + '.' + first
-        : book.name.toUpperCase() + ' ' + (state.chapterIndex+1) + '.' + first + '-' + last;
+        ? book.name + ' ' + (state.chapterIndex+1) + '.' + first
+        : book.name + ' ' + (state.chapterIndex+1) + '.' + first + '-' + last;
     var text = lines.join('\n');
-    // Ponto final forçado
-    text = text.replace(/[.,;:'"]+\s*$/, '') + '.';
     return { text: text, ref: ref, count: sorted.length };
 }
 
@@ -1119,7 +1129,7 @@ function _clearSelection() {
 function copyVerse() {
     const sel = _getSelectedText();
     if (!sel) { toast('Selecione um versículo'); return; }
-    const full = sel.ref + '\n\n' + sel.text + '\n\nBíblia Digital QQ';
+    const full = sel.text + '\n' + sel.ref;
     const msg = sel.count === 1 ? '📋 Versículo copiado!' : '📋 ' + sel.count + ' versículos copiados!';
     navigator.clipboard.writeText(full).then(() => { toast(msg); _clearSelection(); }).catch(() => {
         const ta = document.createElement('textarea');
@@ -1132,7 +1142,7 @@ function copyVerse() {
 function shareVerse() {
     const sel = _getSelectedText();
     if (!sel) { toast('Selecione um versículo'); return; }
-    const full = sel.ref + '\n\n' + sel.text + '\n\nBíblia Digital QQ';
+    const full = sel.text + '\n' + sel.ref;
     if (navigator.share) {
         navigator.share({ text: full }).catch(() => {});
     } else {
