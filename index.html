@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Bíblia Digital QQ</title>
-    <!-- Dados da Bíblia — carregam em paralelo enquanto a página renderiza -->
+    <!-- Dados carregam em paralelo (defer = não bloqueiam a página) -->
     <script src="Biblia_data_JFA.js" defer></script>
     <script src="Biblia_data_KJF.js" defer></script>
     <script src="Biblia_data_NTLH.js" defer></script>
@@ -1870,32 +1870,13 @@ async function init() {
     applyTheme();
     document.getElementById('bible-text').style.fontSize = state.fontSize + 'px';
 
-    // Inicializa o seletor de versões PRIMEIRO (carrega os arquivos de dados)
-    if (typeof BibleVersionsSimple !== 'undefined') {
-        try {
-            await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH', 'NVI'], 'JFA');
-            // Move o botão pro topbar
-            const vc = document.getElementById('bible-version-container');
-            const tgt = document.getElementById('version-btn-container');
-            if (vc && tgt) tgt.appendChild(vc);
-        } catch(e) { console.log('Versões:', e); }
-
-        // Quando a versão muda, atualiza o bibleData LOCAL e re-renderiza
-        window.addEventListener('bible-version-changed', (e) => {
-            bibleData = window.bibleDataExterno;
-            renderBookList();
-            renderChapterList();
-            renderChapter(true);
-        });
-    }
-
-    // Agora carrega os dados (BibleVersionsSimple já setou window.bibleDataExterno)
+    // Carrega dados da JFA imediatamente (já está no head como defer)
     const loaded = await loadBibleData();
     if (!loaded) {
         toast('⚠️ Usando dados de emergência.');
     }
 
-    // Se tiver última posição, vai para lá
+    // Restaura posição
     if (state.lastPosition) {
         const lp = state.lastPosition;
         if (lp.livro !== undefined) state.bookIndex = lp.livro;
@@ -1924,6 +1905,24 @@ async function init() {
     });
 
     console.log('✅ Bíblia Digital Qq carregada!');
+
+    // ── SELETOR DE VERSÕES (carrega em background, sem bloquear a leitura) ──
+    if (typeof BibleVersionsSimple !== 'undefined') {
+        // Listener de troca (registra antes de iniciar)
+        window.addEventListener('bible-version-changed', (e) => {
+            bibleData = window.bibleDataExterno;
+            renderBookList();
+            renderChapterList();
+            renderChapter(true);
+        });
+
+        // Inicializa em background — app já está funcionando
+        BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH', 'NVI'], 'JFA').then(() => {
+            const vc = document.getElementById('bible-version-container');
+            const tgt = document.getElementById('version-btn-container');
+            if (vc && tgt) tgt.appendChild(vc);
+        });
+    }
 }
 
 // Inicia quando o DOM estiver pronto
