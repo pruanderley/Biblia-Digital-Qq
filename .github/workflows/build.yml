@@ -41,10 +41,20 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Copy MainActivity.java
+      - name: Copy Java patches
         run: |
           mkdir -p android/app/src/main/java/biblia/digital/qq/
-          cp patches/MainActivity.java android/app/src/main/java/biblia/digital/qq/MainActivity.java
+          cp patches/MainActivity.java android/app/src/main/java/biblia/digital/qq/
+          cp patches/AudioForegroundService.java android/app/src/main/java/biblia/digital/qq/
+
+      - name: Patch AndroidManifest for foreground service
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Adiciona permissão de FOREGROUND_SERVICE
+          sed -i 's|</manifest>|    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n</manifest>|' "$MANIFEST"
+          # Adiciona o service dentro da tag <application>
+          sed -i 's|</application>|        <service android:name=".AudioForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />\n    </application>|' "$MANIFEST"
+          echo "AndroidManifest patched"
 
       - name: Sync Capacitor
         run: npx cap sync android
