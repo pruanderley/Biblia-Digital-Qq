@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Bíblia Digital QQ</title>
-    <!-- Dados da Bíblia — carregam em paralelo enquanto a página renderiza -->
+    <!-- Dados carregam em paralelo (defer = não bloqueiam a página) -->
     <script src="Biblia_data_JFA.js" defer></script>
     <script src="Biblia_data_KJF.js" defer></script>
     <script src="Biblia_data_NTLH.js" defer></script>
@@ -1185,6 +1185,11 @@ let _ttsKeepaliveInterval = null, _ttsAudioCtx = null, _ttsAudioNode = null;
 
 function _hasWebSpeech() { return typeof window.speechSynthesis !== 'undefined'; }
 
+function _hasAndroidBridge() {
+    return typeof window.Android !== 'undefined' &&
+           typeof window.Android.startTTS === 'function';
+}
+
 function _getBestVoice() {
     const voices = window.speechSynthesis.getVoices();
     return voices.find(v => v.lang && v.lang.startsWith('pt')) || null;
@@ -1261,7 +1266,41 @@ function _stopAudioKeepalive() {
     try { if (_ttsAudioCtx) { _ttsAudioCtx.close(); _ttsAudioCtx = null; } } catch(e) {}
 }
 
-// ── FALAR VERSO POR VERSO ────────────────────────────
+// ── BRIDGE ANDROID NATIVO: verso por verso via Java TTS ──────
+function _androidSpeakNext() {
+    if (!_ttsRunning || _ttsIdx >= _ttsQueue.length) {
+        if (_ttsRunning) _ttsFinished();
+        return;
+    }
+    const item = _ttsQueue[_ttsIdx];
+    // Destaca o verso atual
+    document.querySelectorAll('.verse.tts-reading').forEach(el => el.classList.remove('tts-reading'));
+    const verseEl = document.querySelector(`.verse[data-verse="${item.vi}"]`);
+    if (verseEl) {
+        verseEl.classList.add('tts-reading');
+        if (verseEl.scrollIntoView) verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    try {
+        window.Android.startTTS(String(item.text), 'pt-BR', 0.95, 1.0);
+    } catch(e) {
+        // Bridge falhou — fallback pra Web Speech
+        _ttsSpeakNext();
+    }
+}
+
+// APK chama este callback quando cada verso termina
+window.onTTSVerseFinished = () => {
+    if (!_ttsRunning) return;
+    _ttsIdx++;
+    setTimeout(_androidSpeakNext, 150);
+};
+
+// APK chama quando o capítulo inteiro termina (batch mode)
+window.onTTSChapterDone = () => {
+    if (_ttsRunning) _ttsFinished();
+};
+
+// ── WEB SPEECH: verso por verso (navegador) ──────────────────
 function _ttsSpeakNext() {
     if (!_ttsRunning || _ttsIdx >= _ttsQueue.length) {
         if (_ttsRunning) _ttsFinished();
@@ -1364,29 +1403,55 @@ function _cleanup() {
 // ── INICIAR / PARAR ──────────────────────────────────
 async function playChapterAudio() {
     if (state.audioPlaying || _ttsRunning) { stopChapterAudio(); return; }
-    if (!_hasWebSpeech()) { toast('TTS não disponível.'); return; }
 
     const book = bibleData[state.bookIndex];
     if (!book) return;
     const verses = book.chapters[state.chapterIndex];
     if (!verses || !verses.length) return;
 
-    try { window.speechSynthesis.cancel(); } catch(e) {}
+    // Detecta qual engine usar
+    const useNative = _hasAndroidBridge();
+    const useWeb = !useNative && (typeof window.speechSynthesis !== 'undefined');
+
+    if (!useNative && !useWeb) {
+        toast('Instale o Google TTS na Play Store ou use no navegador Chrome.');
+        return;
+    }
+
+    try { if (useWeb) window.speechSynthesis.cancel(); } catch(e) {}
     _ttsQueue = _buildQueue(); _ttsIdx = 0;
     _ttsRunning = true; state.audioPlaying = true;
 
     await _requestWakeLock();
-    _startAudioKeepalive();
-    _startTtsKeepalive();
+    if (useWeb) { _startAudioKeepalive(); _startTtsKeepalive(); }
     _setAudioUI(true, '🔊 ' + book.name + ' ' + (state.chapterIndex + 1) + ' — ' + verses.length + ' versículos');
 
-    setTimeout(() => { if (_ttsRunning) _ttsSpeakNext(); }, 200);
+    // No APK: usa bridge nativo + foreground service
+    if (useNative) {
+        try {
+            if (window.Android.acquireWakeLock) window.Android.acquireWakeLock();
+            if (window.Android.startReadingForeground)
+                window.Android.startReadingForeground(book.name + ' ' + (state.chapterIndex + 1), 'Bíblia Digital QQ');
+        } catch(e) {}
+    }
+
+    setTimeout(() => {
+        if (!_ttsRunning) return;
+        if (useNative) _androidSpeakNext();
+        else _ttsSpeakNext();
+    }, 200);
 }
 
 function stopChapterAudio() {
     _ttsRunning = false; state.audioPlaying = false;
     _ttsIdx = _ttsQueue.length;
     _cleanup();
+    // Para o TTS nativo do Android
+    if (_hasAndroidBridge()) {
+        try { if (window.Android.stopTTS) window.Android.stopTTS(); } catch(e) {}
+        try { if (window.Android.releaseWakeLock) window.Android.releaseWakeLock(); } catch(e) {}
+        try { if (window.Android.stopReadingForeground) window.Android.stopReadingForeground(); } catch(e) {}
+    }
     document.querySelectorAll('.verse.tts-reading').forEach(el => el.classList.remove('tts-reading'));
     _setAudioUI(false);
 }
@@ -1870,32 +1935,13 @@ async function init() {
     applyTheme();
     document.getElementById('bible-text').style.fontSize = state.fontSize + 'px';
 
-    // Inicializa o seletor de versões PRIMEIRO (carrega os arquivos de dados)
-    if (typeof BibleVersionsSimple !== 'undefined') {
-        try {
-            await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH', 'NVI'], 'JFA');
-            // Move o botão pro topbar
-            const vc = document.getElementById('bible-version-container');
-            const tgt = document.getElementById('version-btn-container');
-            if (vc && tgt) tgt.appendChild(vc);
-        } catch(e) { console.log('Versões:', e); }
-
-        // Quando a versão muda, atualiza o bibleData LOCAL e re-renderiza
-        window.addEventListener('bible-version-changed', (e) => {
-            bibleData = window.bibleDataExterno;
-            renderBookList();
-            renderChapterList();
-            renderChapter(true);
-        });
-    }
-
-    // Agora carrega os dados (BibleVersionsSimple já setou window.bibleDataExterno)
+    // Carrega dados da JFA imediatamente (já está no head como defer)
     const loaded = await loadBibleData();
     if (!loaded) {
         toast('⚠️ Usando dados de emergência.');
     }
 
-    // Se tiver última posição, vai para lá
+    // Restaura posição
     if (state.lastPosition) {
         const lp = state.lastPosition;
         if (lp.livro !== undefined) state.bookIndex = lp.livro;
@@ -1924,6 +1970,24 @@ async function init() {
     });
 
     console.log('✅ Bíblia Digital Qq carregada!');
+
+    // ── SELETOR DE VERSÕES (carrega em background, sem bloquear a leitura) ──
+    if (typeof BibleVersionsSimple !== 'undefined') {
+        // Listener de troca (registra antes de iniciar)
+        window.addEventListener('bible-version-changed', (e) => {
+            bibleData = window.bibleDataExterno;
+            renderBookList();
+            renderChapterList();
+            renderChapter(true);
+        });
+
+        // Inicializa em background — app já está funcionando
+        BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH', 'NVI'], 'JFA').then(() => {
+            const vc = document.getElementById('bible-version-container');
+            const tgt = document.getElementById('version-btn-container');
+            if (vc && tgt) tgt.appendChild(vc);
+        });
+    }
 }
 
 // Inicia quando o DOM estiver pronto
