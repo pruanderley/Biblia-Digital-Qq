@@ -27,6 +27,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Prepare www folder
+        run: |
+          mkdir -p www
+          cp -r *.html *.js *.json *.png *.css www/ 2>/dev/null || true
+          cp -r icons www/icons 2>/dev/null || true
+          cp -r assets www/assets 2>/dev/null || true
+          ls -la www/
+
       - name: Remove android folder if exists
         run: rm -rf android
 
