@@ -1,7 +1,7 @@
 {
   "appId": "biblia.digital.qq",
   "appName": "Bíblia Digital QQ",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https"
   },
