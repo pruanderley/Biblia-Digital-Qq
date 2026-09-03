@@ -1,4 +1,4 @@
-package biblia.harpa.offline;
+package biblia.digital.qq;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
