@@ -47,14 +47,35 @@ jobs:
           cp patches/MainActivity.java android/app/src/main/java/biblia/digital/qq/
           cp patches/AudioForegroundService.java android/app/src/main/java/biblia/digital/qq/
 
+      - name: Generate app icons from icon-512.png
+        run: |
+          sudo apt-get install -y imagemagick -qq
+          ICON="icon-512.png"
+          if [ ! -f "$ICON" ]; then ICON="www/icon-512.png"; fi
+          if [ ! -f "$ICON" ]; then echo "⚠️ icon-512.png não encontrado, usando padrão"; exit 0; fi
+
+          # Gera ícones pra cada densidade Android
+          for SIZE_DIR in "mdpi:48" "hdpi:72" "xhdpi:96" "xxhdpi:144" "xxxhdpi:192"; do
+            DIR=$(echo $SIZE_DIR | cut -d: -f1)
+            SIZE=$(echo $SIZE_DIR | cut -d: -f2)
+            DEST="android/app/src/main/res/mipmap-${DIR}"
+            mkdir -p "$DEST"
+            convert "$ICON" -resize ${SIZE}x${SIZE} "$DEST/ic_launcher.png"
+            convert "$ICON" -resize ${SIZE}x${SIZE} "$DEST/ic_launcher_round.png"
+            convert "$ICON" -resize ${SIZE}x${SIZE} "$DEST/ic_launcher_foreground.png"
+            echo "✅ mipmap-${DIR}: ${SIZE}x${SIZE}"
+          done
+
+          # Remove os ícones XML adaptativos padrão (que sobreporiam os nossos PNG)
+          find android/app/src/main/res -name "ic_launcher*.xml" -delete 2>/dev/null || true
+          echo "✅ Ícones do app gerados!"
+
       - name: Patch AndroidManifest for foreground service
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Adiciona permissão de FOREGROUND_SERVICE
           sed -i 's|</manifest>|    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n</manifest>|' "$MANIFEST"
-          # Adiciona o service dentro da tag <application>
           sed -i 's|</application>|        <service android:name=".AudioForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />\n    </application>|' "$MANIFEST"
-          echo "AndroidManifest patched"
+          echo "✅ AndroidManifest patched"
 
       - name: Sync Capacitor
         run: npx cap sync android
