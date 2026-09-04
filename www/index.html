@@ -552,8 +552,92 @@
             .chapter-grid { grid-template-columns: repeat(3, 1fr); }
         }
     </style>
+    <style>
+    /* ── SPLASH SCREEN ───────────────────────────────── */
+    #splash-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: radial-gradient(ellipse at center, #141414 0%, #0a0a0a 70%, #000000 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 1.2s ease;
+    }
+    #splash-screen.hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .splash-content {
+        text-align: center;
+        animation: splashFadeIn 1.5s ease;
+    }
+    @keyframes splashFadeIn {
+        from { opacity: 0; transform: scale(0.85) translateY(20px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .splash-icon {
+        width: 120px;
+        height: 120px;
+        border-radius: 22px;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(255,255,255,0.05);
+        margin-bottom: 24px;
+        animation: splashPulse 2s ease-in-out infinite;
+    }
+    @keyframes splashPulse {
+        0%, 100% { box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(255,255,255,0.03); }
+        50% { box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(255,255,255,0.08); }
+    }
+    .splash-title {
+        font-family: 'Cinzel', Georgia, serif;
+        font-size: 18px;
+        letter-spacing: 6px;
+        color: #b8a080;
+        margin-bottom: 4px;
+    }
+    .splash-subtitle {
+        font-family: 'Cinzel', Georgia, serif;
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: 12px;
+        color: #ffffff;
+        margin-bottom: 28px;
+    }
+    .splash-bar {
+        width: 220px;
+        height: 3px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 3px;
+        margin: 0 auto;
+        overflow: hidden;
+    }
+    .splash-bar-fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #c0392b, #e67e22, #d4a528);
+        border-radius: 3px;
+        animation: splashLoad 4s ease forwards;
+    }
+    @keyframes splashLoad {
+        0% { width: 0%; }
+        30% { width: 40%; }
+        60% { width: 70%; }
+        90% { width: 90%; }
+        100% { width: 100%; }
+    }
+    </style>
 </head>
 <body>
+
+<!-- SPLASH SCREEN -->
+<div id="splash-screen">
+    <div class="splash-content">
+        <img src="icon-512.png" alt="Bíblia Digital QQ" class="splash-icon">
+        <div class="splash-title">BÍBLIA DIGITAL</div>
+        <div class="splash-subtitle">QQ</div>
+        <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+    </div>
+</div>
 
 <div id="app">
     <!-- Topbar -->
@@ -1970,6 +2054,14 @@ async function init() {
     });
 
     console.log('✅ Bíblia Digital Qq carregada!');
+
+    // Esconde o splash screen
+    const splash = document.getElementById('splash-screen');
+    await new Promise(r => setTimeout(r, 3500));
+    if (splash) {
+        splash.classList.add('hidden');
+        setTimeout(() => splash.remove(), 1500);
+    }
 
     // ── SELETOR DE VERSÕES (carrega em background, sem bloquear a leitura) ──
     if (typeof BibleVersionsSimple !== 'undefined') {
