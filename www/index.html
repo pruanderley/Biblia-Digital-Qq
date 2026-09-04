@@ -2004,6 +2004,14 @@ async function init() {
     applyTheme();
     document.getElementById('bible-text').style.fontSize = state.fontSize + 'px';
 
+    // Aplica a cor preta na barra de status nativa do Android (fora do
+    // WebView, os meta tags do <head> não alcançam a barra do app instalado)
+    try {
+        if (window.Android && window.Android.setStatusBarColor) {
+            window.Android.setStatusBarColor('#000000');
+        }
+    } catch(e) {}
+
     // ── SELETOR DE VERSÕES (carrega os dados da Bíblia) ──
     if (typeof BibleVersionsSimple !== 'undefined') {
         window.addEventListener('bible-version-changed', (e) => {
