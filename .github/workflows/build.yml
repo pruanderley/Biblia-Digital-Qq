@@ -38,6 +38,18 @@ jobs:
       - name: Remove android folder if exists
         run: rm -rf android
 
+      - name: Preparar capacitor.config.json
+        run: |
+          if [ -f "capacitor.config.json" ]; then
+            echo "capacitor.config.json já existe na raiz"
+          elif [ -f "capacitor_config.json" ]; then
+            cp capacitor_config.json capacitor.config.json
+            echo "capacitor_config.json copiado para capacitor.config.json"
+          else
+            echo "ERRO: nem capacitor.config.json nem capacitor_config.json encontrados na raiz"
+            exit 1
+          fi
+
       - name: Add Android platform
         run: npx cap add android
 
