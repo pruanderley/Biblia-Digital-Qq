@@ -342,36 +342,6 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception e) { e.printStackTrace(); }
             });
         }
-
-        // ── Barra de status ───────────────────────────────────
-        @JavascriptInterface
-        public void setStatusBarColor(String color) {
-            runOnUiThread(() -> {
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        int cor = android.graphics.Color.parseColor(color);
-                        getWindow().setStatusBarColor(cor);
-
-                        // Ícones claros ou escuros conforme o fundo
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            int flags = getWindow().getDecorView().getSystemUiVisibility();
-                            // Calcula luminância
-                            double lum = (0.299 * android.graphics.Color.red(cor)
-                                        + 0.587 * android.graphics.Color.green(cor)
-                                        + 0.114 * android.graphics.Color.blue(cor)) / 255.0;
-                            if (lum > 0.55) {
-                                // Fundo claro → ícones escuros
-                                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                            } else {
-                                // Fundo escuro → ícones claros
-                                flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                            }
-                            getWindow().getDecorView().setSystemUiVisibility(flags);
-                        }
-                    }
-                } catch (Exception e) { e.printStackTrace(); }
-            });
-        }
     }
 
     private void acquireWakeLockInternal() {
