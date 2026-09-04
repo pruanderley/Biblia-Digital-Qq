@@ -8,6 +8,11 @@
     "webContentsDebuggingEnabled": false
   },
   "plugins": {
+    "StatusBar": {
+      "style": "dark",
+      "backgroundColor": "#007acc",
+      "overlaysWebView": false
+    },
     "SplashScreen": {
       "launchShowDuration": 0
     }
