@@ -812,7 +812,7 @@ function loadState() {
 function applyTheme() {
     document.body.classList.toggle('light', state.theme === 'light');
     document.getElementById('theme-toggle').textContent = state.theme === 'light' ? '☀️' : '🌙';
-    document.querySelector('meta[name="theme-color"]').content = state.theme === 'light' ? '#1a73e8' : '#000000';
+    document.querySelector('meta[name="theme-color"]').content = state.theme === 'light' ? '#000000' : '#000000';
 }
 
 // ====================================================================
